@@ -7,6 +7,18 @@ before_install:
   - sudo apt-get install -qq libdb-dev
 
 install:
-  - "python setup.py install"
+  - pip install -r requirements.txt
+  - python setup.py install
 
-script: nosetests
+before_script:
+  # the following two lines are to prevent travis from
+  # verbosely complaining about a security problem; see issue 54
+  - mkdir $HOME/.python-eggs
+  - chmod og-w $HOME/.python-eggs
+
+# run_tests.py runs everything under the script: tag so only put commands
+# under it that we want to run (and want to be able to run) as local tests
+script: 
+  - flake8 tests ga4gh scripts
+  - nosetests --with-coverage --cover-package ga4gh
+              --cover-inclusive --cover-min-percentage 80
