@@ -22,6 +22,21 @@ class VariantSet(object):
     """
     # TODO abstract details shared by wormtable and tabix based backends.
 
+    def getId(self):
+        # TODO temporary method before we abstract all of this upwards into
+        # the DataObject class.
+        return self._variantSetId
+
+
+    def toProtocolElement(self):
+        """
+        Converts this data object into it's equivalent GA4GH protocol element.
+        """
+        protocolElement = protocol.GAVariantSet()
+        protocolElement.id = self.getId()
+        protocolElement.datasetId = "NotImplemented"
+        protocolElement.metadata = self.getMetadata()
+        return protocolElement
 
 class WormtableVariantSet(VariantSet):
     """

@@ -8,7 +8,55 @@ from __future__ import unicode_literals
 
 import os
 
+import bintrees
+
 import ga4gh.protocol as protocol
+
+
+class DataObjectCollection(object):
+    """
+    A class representing a collection of data objects allowing for
+    simple and efficient paging using pageTokens.
+    """
+    def __init__(self):
+        self._idMap = bintrees.AVLTree()
+
+    def add(self, dataObject):
+        """
+        Adds the specified object to this collection.
+        """
+        self._idMap[dataObject.getId()] = dataObject
+
+    def parsePageToken(self, pageToken, numValues):
+        """
+        Parses the specified pageToken and returns a list of the specified
+        number of values. Page tokens are assumed to consist of a fixed
+        number of strings seperated by colons. If the page token does
+        not conform to this specification, raise a InvalidPageToken
+        exception.
+        """
+        tokens = pageToken.split(":")
+        # TODO define exceptions.InvalidPageToken and raise here.
+        if len(tokens) != numValues:
+            raise Exception("Invalid number of values in page token")
+        return tokens
+
+    def search(self, request):
+        """
+        Returns an iterator over the ProtocolElements defined by
+        the specified request.
+        """
+        maxKey = self._idMap.max_key()
+        if request.pageToken is None:
+            nextId = self._idMap.min_key()
+        else:
+            nextId, = self.parsePageToken(request.pageToken, 1)
+        for dataObject in self._idMap.value_slice(nextId, None):
+            protocolElement = dataObject.toProtocolElement()
+            nextId = None
+            if dataObject.getId() != maxKey:
+                nextId = self._idMap.succ_key(dataObject.getId())
+            yield protocolElement, nextId
 
 
 class Backend(object):
@@ -18,31 +66,14 @@ class Backend(object):
     """
     def __init__(self, dataDir, variantSetClass):
         self._dataDir = dataDir
-        self._variantSetIdMap = {}
+        self._variantSets = DataObjectCollection()
         # All directories in datadir are assumed to correspond to VariantSets.
         for variantSetId in os.listdir(self._dataDir):
             relativePath = os.path.join(self._dataDir, variantSetId)
             if os.path.isdir(relativePath):
-                self._variantSetIdMap[variantSetId] = variantSetClass(
-                    variantSetId, relativePath)
-        self._variantSetIds = sorted(self._variantSetIdMap.keys())
+                variantSet = variantSetClass(variantSetId, relativePath)
+                self._variantSets.add(variantSet)
 
-    def parsePageToken(self, pageToken, numValues):
-        """
-        Parses the specified pageToken and returns a list of the specified
-        number of values. Page tokens are assumed to consist of a fixed
-        number of integers seperated by colons. If the page token does
-        not conform to this specification, raise a InvalidPageToken
-        exception.
-        """
-        tokens = pageToken.split(":")
-        # TODO define exceptions.InvalidPageToken and raise here.
-        if len(tokens) != numValues:
-            raise Exception("Invalid number of values in page token")
-        # TODO catch a ValueError here when bad integers are passed and
-        # convert this into the appropriate InvalidPageToken exception.
-        values = map(int, tokens)
-        return values
 
     def runSearchRequest(
             self, requestStr, requestClass, responseClass, pageListName,
@@ -95,22 +126,10 @@ class Backend(object):
     def variantSetsGenerator(self, request):
         """
         Returns a generator over the (variantSet, nextPageToken) pairs defined
-        by the speficied request.
+        by the specified request.
         """
-        currentIndex = 0
-        if request.pageToken is not None:
-            currentIndex, = self.parsePageToken(request.pageToken, 1)
-        while currentIndex < len(self._variantSetIds):
-            variantSet = protocol.GAVariantSet()
-            variantSet.id = self._variantSetIds[currentIndex]
-            variantSet.datasetId = "NotImplemented"
-            variantSet.metadata = self._variantSetIdMap[
-                variantSet.id].getMetadata()
-            currentIndex += 1
-            nextPageToken = None
-            if currentIndex < len(self._variantSetIds):
-                nextPageToken = str(currentIndex)
-            yield variantSet, nextPageToken
+        for protocolElement in self._variantSets.search(request):
+            yield protocolElement
 
     def variantsGenerator(self, request):
         """
