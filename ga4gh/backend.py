@@ -41,22 +41,56 @@ class DataObjectCollection(object):
             raise Exception("Invalid number of values in page token")
         return tokens
 
-    def search(self, request):
+    def search(self, request, depth):
         """
         Returns an iterator over the ProtocolElements defined by
         the specified request.
         """
-        maxKey = self._idMap.max_key()
-        if request.pageToken is None:
-            nextId = self._idMap.min_key()
+        if depth == 1:
+            maxKey = self._idMap.max_key()
+            if request.pageToken is None:
+                nextId = self._idMap.min_key()
+            else:
+                nextId, = self.parsePageToken(request.pageToken, 1)
+            for dataObject in self._idMap.value_slice(nextId, None):
+                protocolElement = dataObject.toProtocolElement()
+                nextId = None
+                if dataObject.getId() != maxKey:
+                    nextId = self._idMap.succ_key(dataObject.getId())
+                yield protocolElement, nextId
         else:
-            nextId, = self.parsePageToken(request.pageToken, 1)
-        for dataObject in self._idMap.value_slice(nextId, None):
-            protocolElement = dataObject.toProtocolElement()
-            nextId = None
-            if dataObject.getId() != maxKey:
-                nextId = self._idMap.succ_key(dataObject.getId())
-            yield protocolElement, nextId
+            assert depth == 2
+            if request.pageToken is None:
+                variantSetIds = request.variantSetIds
+                nextId = variantSetIds[0]
+            else:
+                nextId, subtoken = self.parsePageToken(request.pageToken, 2)
+            for dataObject in self._idMap.value_slice(nextId, None):
+                # DataObject is also a data collection. So, we iterate over this.
+                for v in dataObject.search(request, 1):
+                    yield v
+
+                # if dataObject.getId() != maxKey:
+                # nextId = self._idMap.succ_key(dataObject.getId())
+
+#         variantSetIds = request.variantSetIds
+#         startVariantSetIndex = 0
+#         startPosition = request.start
+#         if request.pageToken is not None:
+#             startVariantSetIndex, startPosition = self.parsePageToken(
+#                 request.pageToken, 2)
+#         for variantSetIndex in range(startVariantSetIndex, len(variantSetIds)):
+#             variantSetId = variantSetIds[variantSetIndex]
+#             if variantSetId in self._variantSetIdMap:
+#                 variantSet = self._variantSetIdMap[variantSetId]
+#                 iterator = variantSet.getVariants(
+#                     request.referenceName, startPosition, request.end,
+#                     request.variantName, request.callSetIds)
+#                 for variant in iterator:
+#                     nextPageToken = "{0}:{1}".format(
+#                         variantSetIndex, variant.start + 1)
+#                     yield variant, nextPageToken
+
 
 
 class Backend(object):
@@ -128,7 +162,7 @@ class Backend(object):
         Returns a generator over the (variantSet, nextPageToken) pairs defined
         by the specified request.
         """
-        for protocolElement in self._variantSets.search(request):
+        for protocolElement in self._variantSets.search(request, 1):
             yield protocolElement
 
     def variantsGenerator(self, request):
@@ -136,23 +170,8 @@ class Backend(object):
         Returns a generator over the (variant, nextPageToken) pairs defined by
         the specified request.
         """
-        variantSetIds = request.variantSetIds
-        startVariantSetIndex = 0
-        startPosition = request.start
-        if request.pageToken is not None:
-            startVariantSetIndex, startPosition = self.parsePageToken(
-                request.pageToken, 2)
-        for variantSetIndex in range(startVariantSetIndex, len(variantSetIds)):
-            variantSetId = variantSetIds[variantSetIndex]
-            if variantSetId in self._variantSetIdMap:
-                variantSet = self._variantSetIdMap[variantSetId]
-                iterator = variantSet.getVariants(
-                    request.referenceName, startPosition, request.end,
-                    request.variantName, request.callSetIds)
-                for variant in iterator:
-                    nextPageToken = "{0}:{1}".format(
-                        variantSetIndex, variant.start + 1)
-                    yield variant, nextPageToken
+        for protocolElement in self._variantSets.search(request, 2):
+            yield protocolElement
 
     def startProfile(self):
         pass

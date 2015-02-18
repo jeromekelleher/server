@@ -279,6 +279,19 @@ class WormtableVariantSet(VariantSet):
                     ret.append(buildMetadata(infoField, col))
         return ret
 
+    def search(self, request, depth):
+        startPosition = 0
+        if request.pageToken is not None:
+            tokens = request.pageToken.split(":")
+            startPosition = int(tokens[1])
+        iterator = self.getVariants(
+                request.referenceName, startPosition, request.end,
+                request.variantName, request.callSetIds)
+        for variant in iterator:
+            pageToken = "{}:{}".format(variant.variantSetId, variant.start + 1)
+            yield variant, pageToken
+
+
 
 class TabixVariantSet(VariantSet):
     """
