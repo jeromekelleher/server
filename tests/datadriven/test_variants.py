@@ -63,7 +63,7 @@ class VariantSetTest(datadriven.DataDrivenTest):
         """
         if len(gaVariants) != len(pyvcfVariants):
             for v in gaVariants:
-                print(v.start, v.end)
+                print(v.start, v.end, v.referenceName)
             for v in pyvcfVariants:
                 print(v)
         self.assertEqual(len(gaVariants), len(pyvcfVariants))

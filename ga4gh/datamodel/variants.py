@@ -543,6 +543,7 @@ class HtslibVariantSet(AbstractVariantSet):
         if variantName is not None:
             raise exceptions.NotImplementedException(
                 "Searching by variantName is not supported")
+        assert callSetIds is None
         if callSetIds is None:
             searchCallSetIds = self._callSetIds
         print(endPosition)
