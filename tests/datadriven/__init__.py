@@ -42,6 +42,7 @@ def makeTests(testDataDir, testClass):
         for name, _ in inspect.getmembers(testClass):
             if name.startswith("test"):
                 yield _wrapTestMethod(getattr(tester, name))
+        break
 
 
 class TestCase(object):

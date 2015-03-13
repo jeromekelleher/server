@@ -439,6 +439,7 @@ class HtslibVariantSet(AbstractVariantSet):
         self._created = protocol.convertDatetime(datetime.datetime.now())
         self._chromFileMap = {}
         self._metadata = None
+        self._callSetIds = None
         for pattern in ['*.bcf', '*.vcf.gz']:
             for filename in glob.glob(os.path.join(vcfPath, pattern)):
                 self._addFile(filename)
@@ -458,6 +459,21 @@ class HtslibVariantSet(AbstractVariantSet):
             if self._metadata != metadata:
                 raise Exception(expMsg)
 
+    def _updateCallSetIds(self, variantFile):
+        """
+        Updates the call set IDs based on the specified variant file.
+        """
+        checkConsistency = True
+        if self._callSetIds is None:
+            self._callSetIds = set()
+            checkConsistency = False
+        for sample in variantFile.header.samples:
+            if checkConsistency:
+                if sample not in self._callSetIds:
+                    raise Exception("Inconsistent sample names in VCF")
+            else:
+                self._callSetIds.add(sample)
+
     def _addFile(self, filename):
         varFile = pysam.VariantFile(filename)
         if varFile.index is None:
@@ -471,9 +487,15 @@ class HtslibVariantSet(AbstractVariantSet):
                 if chrom in self._chromFileMap:
                     raise Exception("cannot have overlapping VCF/BCF files.")
                 self._updateMetadata(varFile)
+                self._updateCallSetIds(varFile)
                 self._chromFileMap[chrom] = varFile
 
-    def convertVariant(self, record):
+    def convertVariant(self, record, callSetIds):
+        """
+        Converts the specified pysam variant record into a GA4GH Variant
+        object. Only calls for the specified list of callSetIds will
+        be included.
+        """
         variant = protocol.GAVariant()
         # N.B. record.pos is 1-based
         #      also consider using record.start-record.stop
@@ -499,6 +521,7 @@ class HtslibVariantSet(AbstractVariantSet):
                 variant.info[key] = _encodeValue(value)
         variant.calls = []
         for name, call in record.samples.iteritems():
+            # if name in callSetIds:
             c = protocol.GACall()
             c.genotype = _encodeValue(call.allele_indices)
             for key, value in record.info.iteritems():
@@ -520,13 +543,14 @@ class HtslibVariantSet(AbstractVariantSet):
         if variantName is not None:
             raise exceptions.NotImplementedException(
                 "Searching by variantName is not supported")
-        if callSetIds is not None:
-            raise exceptions.NotImplementedException(
-                "Specifying call set ids is not supported")
+        if callSetIds is None:
+            searchCallSetIds = self._callSetIds
+        print(endPosition)
         if referenceName in self._chromFileMap:
             varFile = self._chromFileMap[referenceName]
             cursor = varFile.fetch(referenceName, startPosition, endPosition)
-            return itertools.imap(self.convertVariant, cursor)
+            return itertools.imap(
+                self.convertVariant, cursor, searchCallSetIds)
         else:
             return []
 

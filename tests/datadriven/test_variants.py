@@ -61,6 +61,11 @@ class VariantSetTest(datadriven.DataDrivenTest):
         Verifies that the lists of GA4GH variants and pyvcf variants
         are equivalent.
         """
+        if len(gaVariants) != len(pyvcfVariants):
+            for v in gaVariants:
+                print(v.start, v.end)
+            for v in pyvcfVariants:
+                print(v)
         self.assertEqual(len(gaVariants), len(pyvcfVariants))
         for gaVariant, pyvcfVariant in zip(gaVariants, pyvcfVariants):
             pyvcfInfo = pyvcfVariant.INFO
