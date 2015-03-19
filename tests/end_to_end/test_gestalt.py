@@ -32,14 +32,14 @@ DATA_SOURCE = "__SIMULATED__"
 """
 
     def setUp(self):
-        self.client = None
         self.clientOutFile = None
         self.clientErrFile = None
 
     def testEndToEnd(self):
         self.createLogFiles()
-        self.runRequest()
+        self.runVariantSetRequest()
         self.assertLogsWritten()
+        self.runReadsRequest()
         self.removeLogFiles()
 
     def createLogFiles(self):
@@ -92,10 +92,15 @@ DATA_SOURCE = "__SIMULATED__"
             requestFound,
             "No request logged from the client to stderr")
 
-    def runRequest(self):
-        clientCmdLine = """python client_dev.py -v -O variants-search
-            -s0 -e2 {}/v{}""".format(
-            self.serverUrl, protocol.version)
+    def runVariantSetRequest(self):
+        self._runClientCmdLine("variants-search -s0 -e2")
+
+    def runReadsRequest(self):
+        self._runClientCmdLine("reads-search")
+
+    def _runClientCmdLine(self, cmd):
+        clientCmdLine = "python client_dev.py -v -O {} {}/v{}".format(
+            cmd, self.serverUrl, protocol.version)
         splits = shlex.split(clientCmdLine)
-        self.client = subprocess.check_call(
+        subprocess.check_call(
             splits, stdout=self.clientOutFile, stderr=self.clientErrFile)

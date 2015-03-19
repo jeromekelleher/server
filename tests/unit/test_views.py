@@ -66,6 +66,13 @@ class TestFrontend(unittest.TestCase):
         request.datasetIds = datasetIds
         return self.sendRequest('/variantsets/search', request)
 
+    def sendReadsSearch(self, readGroupIds=None):
+        if readGroupIds is None:
+            readGroupIds = []
+        request = protocol.GASearchVariantSetsRequest()
+        request.readGroupIds = readGroupIds
+        return self.sendRequest('/variantsets/search', request)
+
     def sendCallSetsSearch(self, variantSetIds=[""]):
         request = protocol.GASearchCallSetsRequest()
         request.variantSetIds = variantSetIds
@@ -86,6 +93,7 @@ class TestFrontend(unittest.TestCase):
         assertHeaders(self.app.get('/'))
         assertHeaders(self.sendVariantsSearch())
         assertHeaders(self.sendVariantSetsSearch())
+        assertHeaders(self.sendReadsSearch())
         # TODO: Test other methods as they are implemented
 
     def verifySearchRouting(self, path, getDefined=False):
@@ -131,11 +139,8 @@ class TestFrontend(unittest.TestCase):
         self.assertEqual(405, self.app.get(path).status_code)
 
     def testRouteReads(self):
-        paths = ['/reads/search']
+        paths = ['/reads/search', '/readgroupsets/search']
         for path in paths:
-            versionedPath = utils.applyVersion(path)
-            self.assertEqual(404, self.app.post(versionedPath).status_code)
-        for path in ['/readgroupsets/search']:
             self.verifySearchRouting(path)
 
     def testRouteVariants(self):
@@ -168,6 +173,13 @@ class TestFrontend(unittest.TestCase):
         responseData = protocol.GASearchCallSetsResponse.fromJsonString(
             response.data)
         self.assertEqual(responseData.callSets, [])
+
+    def testReadsSearch(self):
+        response = self.sendReadsSearch()
+        self.assertEqual(200, response.status_code)
+        responseData = protocol.GASearchReadsResponse.fromJsonString(
+            response.data)
+        self.assertEqual(responseData.alignments, [])
 
     def testWrongVersion(self):
         path = '/v0.1.2/variantsets/search'

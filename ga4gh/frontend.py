@@ -269,9 +269,10 @@ def searchReadGroupSets(version):
         version, flask.request, app.backend.searchReadGroupSets)
 
 
-@app.route('/<version>/reads/search', methods=['POST'])
+@app.route('/<version>/reads/search', methods=['POST', 'OPTIONS'])
 def searchReads(version):
-    raise exceptions.PathNotFoundException()
+    return handleFlaskPostRequest(
+        version, flask.request, app.backend.searchReads)
 
 
 @app.route('/<version>/referencesets/search', methods=['POST'])

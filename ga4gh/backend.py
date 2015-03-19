@@ -29,6 +29,8 @@ class AbstractBackend(object):
         self._referenceSetIds = []
         self._readGroupSetIdMap = {}
         self._readGroupSetIds = []
+        self._readGroupIds = []
+        self._readGroupIdMap = {}
         self._callSetIdMap = {}
         self._callSetIds = []
         self._requestValidation = False
@@ -121,7 +123,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.GASearchReadsRequest,
-            protocol.GASearchReadsResponse, "reads",
+            protocol.GASearchReadsResponse, "alignments",
             self.readsGenerator)
 
     def searchReferenceSets(self, request):
@@ -216,6 +218,38 @@ class AbstractBackend(object):
         """
         return self._topLevelObjectGenerator(
             request, self._variantSetIdMap, self._variantSetIds)
+
+    def readsGenerator(self, request):
+        readGroupIds = request.readGroupIds
+        if len(readGroupIds) == 0:
+            readGroupIds = self._readGroupIds
+        readGroupStartIndex = 0
+        readStartIndex = 0
+        if request.pageToken is not None:
+            readGroupStartIndex, readStartIndex = self.parsePageToken(
+                request.pageToken, 2)
+        for readGroupIndex in range(readGroupStartIndex, len(readGroupIds)):
+            readGroupId = readGroupIds[readGroupIndex]
+            readGroup = self._readGroupIdMap[readGroupId]
+            iterator = readGroup.getReadAlignments(
+                request.referenceName, request.referenceId,
+                request.start, request.end)
+            readIndex = 0
+            # TODO this is real slow... this means we are going through
+            # every read 1...n-1 in the BAM file to get to read n.
+            # can this be avoided?
+            try:
+                while readIndex < readStartIndex:
+                    iterator.next()
+                    readIndex += 1
+            except StopIteration:
+                pass
+            else:
+                for read in iterator:
+                    nextPageToken = "{}:{}".format(
+                        readGroupIndex, readIndex + 1)
+                    yield read, nextPageToken
+                    readIndex += 1
 
     def variantsGenerator(self, request):
         """
@@ -340,6 +374,15 @@ class SimulatedBackend(AbstractBackend):
             self._variantSetIdMap[variantSetId] = variantSet
         self._variantSetIds = sorted(self._variantSetIdMap.keys())
 
+        # Reads
+        readGroupSetId = "readGroupSetId"
+        readGroupSet = reads.SimulatedReadGroupSet(readGroupSetId)
+        self._readGroupSetIdMap[readGroupSetId] = readGroupSet
+        for readGroup in readGroupSet.getReadGroups():
+            self._readGroupIdMap[readGroup.getId()] = readGroup
+        self._readGroupSetIds = sorted(self._readGroupSetIdMap.keys())
+        self._readGroupIds = sorted(self._readGroupIdMap.keys())
+
 
 class FileSystemBackend(AbstractBackend):
     """
@@ -374,10 +417,13 @@ class FileSystemBackend(AbstractBackend):
         for readGroupSetId in os.listdir(readGroupSetDir):
             relativePath = os.path.join(readGroupSetDir, readGroupSetId)
             if os.path.isdir(relativePath):
-                readGroupSet = reads.ReadGroupSet(
+                readGroupSet = reads.readGroupSetFactory(
                     readGroupSetId, relativePath)
                 self._readGroupSetIdMap[readGroupSetId] = readGroupSet
+                for readGroup in readGroupSet.getReadGroups():
+                    self._readGroupIdMap[readGroup.getId()] = readGroup
         self._readGroupSetIds = sorted(self._readGroupSetIdMap.keys())
+        self._readGroupIds = sorted(self._readGroupIdMap.keys())
 
         # callSets
         for variantSet in self._variantSetIdMap.values():
