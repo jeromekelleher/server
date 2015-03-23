@@ -29,6 +29,7 @@ class TestGestalt(server.ServerTestConfigFile):
 SIMULATED_BACKEND_NUM_VARIANT_SETS = 10
 SIMULATED_BACKEND_VARIANT_DENSITY = 1
 DATA_SOURCE = "__SIMULATED__"
+DEBUG = True
 """
 
     def setUp(self):
@@ -42,6 +43,18 @@ DATA_SOURCE = "__SIMULATED__"
         self.runReadsRequest()
         self.removeLogFiles()
 
+    def getClientOutLines(self):
+        self.clientOutFile.flush()
+        self.clientOutFile.seek(0)
+        clientOutLines = self.clientOutFile.readlines()
+        return clientOutLines
+
+    def getClientErrLines(self):
+        self.clientErrFile.flush()
+        self.clientErrFile.seek(0)
+        clientErrLines = self.clientErrFile.readlines()
+        return clientErrLines
+
     def createLogFiles(self):
         self.clientOutFile = tempfile.TemporaryFile()
         self.clientErrFile = tempfile.TemporaryFile()
@@ -51,12 +64,10 @@ DATA_SOURCE = "__SIMULATED__"
         self.clientErrFile.close()
 
     def assertLogsWritten(self):
-        self.clientOutFile.seek(0)
-        self.clientErrFile.seek(0)
         serverOutLines = self.getServerOutLines()
         serverErrLines = self.getServerErrLines()
-        clientOutLines = self.clientOutFile.readlines()
-        clientErrLines = self.clientErrFile.readlines()
+        clientOutLines = self.getClientOutLines()
+        clientErrLines = self.getClientErrLines()
 
         # nothing should be written to server stdout
         self.assertEqual(
@@ -80,7 +91,8 @@ DATA_SOURCE = "__SIMULATED__"
 
         # num of client stdout should be twice the value of
         # SIMULATED_BACKEND_NUM_VARIANT_SETS
-        self.assertEqual(len(clientOutLines), 20)
+        expectedNumClientOutLines = 20
+        self.assertEqual(len(clientOutLines), expectedNumClientOutLines)
 
         # client stderr should log at least one post
         requestFound = False
@@ -102,5 +114,30 @@ DATA_SOURCE = "__SIMULATED__"
         clientCmdLine = "python client_dev.py -v -O {} {}/v{}".format(
             cmd, self.serverUrl, protocol.version)
         splits = shlex.split(clientCmdLine)
-        subprocess.check_call(
-            splits, stdout=self.clientOutFile, stderr=self.clientErrFile)
+        try:
+            subprocess.check_call(
+                splits,
+                stdout=self.clientOutFile,
+                stderr=self.clientErrFile)
+        except subprocess.CalledProcessError as error:
+            # TODO wait until 'Traceback' in serverErrLines
+            serverOutLines = self.getServerOutLines()
+            serverErrLines = self.getServerErrLines()
+            clientOutLines = self.getClientOutLines()
+            clientErrLines = self.getClientErrLines()
+            print('\n')
+            print('*** Server CONFIG ***')
+            print(self.config)
+            print('*** Server CMD ***')
+            print(self.serverCmdLine)
+            print('*** Client CMD ***')
+            print(clientCmdLine)
+            print('*** Server STDOUT ***')
+            print(''.join(serverOutLines))
+            print('*** Server STDERR ***')
+            print(''.join(serverErrLines))
+            print('*** Client STDOUT ***')
+            print(''.join(clientOutLines))
+            print('*** Client STDERR ***')
+            print(''.join(clientErrLines))
+            raise error

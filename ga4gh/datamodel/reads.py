@@ -67,10 +67,6 @@ class SamFlags(object):
         flagAttr |= flag
 
 
-def readGroupSetFactory(readGroupSetId, relativePath):
-    return HtslibReadGroupSet(readGroupSetId, relativePath)
-
-
 class AbstractReadGroupSet(object):
     """
     The base class of a read group set
@@ -182,22 +178,28 @@ class SimulatedReadGroup(AbstractReadGroup):
         # TODO fill out a bit more
         id_ = "{}:simulated{}".format(self._id, i)
         alignment = protocol.GAReadAlignment()
-        self.alignedQuality = [1, 2, 3]
-        self.alignedSequence = "ACT"
-        self.alignment = ""
-        self.duplicateFragment = False
-        self.failedVendorQualityChecks = False
-        self.fragmentLength = 3
-        self.fragmentName = id_
+        alignment.alignedQuality = [1, 2, 3]
+        alignment.alignedSequence = "ACT"
+        gaPosition = protocol.GAPosition()
+        gaPosition.position = 0
+        gaPosition.referenceName = "whatevs"
+        gaPosition.reverseStrand = False
+        gaLinearAlignment = protocol.GALinearAlignment()
+        gaLinearAlignment.position = gaPosition
+        alignment.alignment = gaLinearAlignment
+        alignment.duplicateFragment = False
+        alignment.failedVendorQualityChecks = False
+        alignment.fragmentLength = 3
+        alignment.fragmentName = id_
         alignment.id = id_
-        self.info = {}
-        self.nextMatePosition = None
-        self.numberReads = None
-        self.properPlacement = False
-        self.readGroupId = None
-        self.readNumber = None
-        self.secondaryAlignment = False
-        self.supplementaryAlignment = False
+        alignment.info = {}
+        alignment.nextMatePosition = None
+        alignment.numberReads = None
+        alignment.properPlacement = False
+        alignment.readGroupId = self._id
+        alignment.readNumber = None
+        alignment.secondaryAlignment = False
+        alignment.supplementaryAlignment = False
         return alignment
 
 

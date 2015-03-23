@@ -402,7 +402,7 @@ class SimulatedBackend(AbstractBackend):
         self._variantSetIds = sorted(self._variantSetIdMap.keys())
 
         # Reads
-        readGroupSetId = "readGroupSetId"
+        readGroupSetId = "aReadGroupSet"
         readGroupSet = reads.SimulatedReadGroupSet(readGroupSetId)
         self._readGroupSetIdMap[readGroupSetId] = readGroupSet
         for readGroup in readGroupSet.getReadGroups():
@@ -444,7 +444,7 @@ class FileSystemBackend(AbstractBackend):
         for readGroupSetId in os.listdir(readGroupSetDir):
             relativePath = os.path.join(readGroupSetDir, readGroupSetId)
             if os.path.isdir(relativePath):
-                readGroupSet = reads.readGroupSetFactory(
+                readGroupSet = reads.HtslibReadGroupSet(
                     readGroupSetId, relativePath)
                 self._readGroupSetIdMap[readGroupSetId] = readGroupSet
                 for readGroup in readGroupSet.getReadGroups():
