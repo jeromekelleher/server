@@ -6,6 +6,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import ast
 import json
 import os
 import random
@@ -220,36 +221,62 @@ class AbstractBackend(object):
             request, self._variantSetIdMap, self._variantSetIds)
 
     def readsGenerator(self, request):
-        readGroupIds = request.readGroupIds
-        if len(readGroupIds) == 0:
-            readGroupIds = self._readGroupIds
-        readGroupStartIndex = 0
-        readStartIndex = 0
-        if request.pageToken is not None:
-            readGroupStartIndex, readStartIndex = self.parsePageToken(
-                request.pageToken, 2)
-        for readGroupIndex in range(readGroupStartIndex, len(readGroupIds)):
-            readGroupId = readGroupIds[readGroupIndex]
-            readGroup = self._readGroupIdMap[readGroupId]
-            iterator = readGroup.getReadAlignments(
-                request.referenceName, request.referenceId,
-                request.start, request.end)
-            readIndex = 0
-            # TODO this is real slow... this means we are going through
-            # every read 1...n-1 in the BAM file to get to read n.
-            # can this be avoided?
-            try:
-                while readIndex < readStartIndex:
-                    iterator.next()
-                    readIndex += 1
-            except StopIteration:
-                pass
-            else:
+        def readsGeneratorInternal(request):
+            def parseReadPageToken(pageToken):
+                firstColonIndex = pageToken.find(':')
+                secondColonIndex = pageToken[
+                    firstColonIndex + 1:].find(':') + firstColonIndex + 1
+                readGroupStartIndex = int(
+                    pageToken[:firstColonIndex])
+                readStartIndex = int(
+                    pageToken[firstColonIndex + 1:secondColonIndex])
+                seenIdsList = ast.literal_eval(
+                    pageToken[secondColonIndex + 1:])
+                return readGroupStartIndex, readStartIndex, seenIdsList
+            readGroupIds = request.readGroupIds
+            if len(readGroupIds) == 0:
+                readGroupIds = self._readGroupIds
+            readGroupStartIndex = 0
+            readStartIndex = request.start
+            seenIdsList = []
+            if request.pageToken is not None:
+                readGroupStartIndex, readStartIndex, seenIdsList = \
+                    parseReadPageToken(request.pageToken)
+            seenIds = set(seenIdsList)
+            for readGroupIndex in range(
+                    readGroupStartIndex, len(readGroupIds)):
+                readGroupId = readGroupIds[readGroupIndex]
+                readGroup = self._readGroupIdMap[readGroupId]
+                iterator = readGroup.getReadAlignments(
+                    request.referenceName, request.referenceId,
+                    readStartIndex, request.end)
                 for read in iterator:
-                    nextPageToken = "{}:{}".format(
-                        readGroupIndex, readIndex + 1)
-                    yield read, nextPageToken
-                    readIndex += 1
+                    if read.id not in seenIds:
+                        yield read, readGroupIndex, seenIdsList
+
+        iterator = readsGeneratorInternal(request)
+        read = None
+        nextRead = None
+        seenIds = []
+        try:
+            while True:
+                if nextRead is None:
+                    read, readGroupIndex, readGroupSeenIdsList = \
+                        iterator.next()
+                else:
+                    read = nextRead
+                nextRead, nextReadGroupIndex, _ = iterator.next()
+                nextReadPos = nextRead.alignment.position.position
+                if readGroupIndex == nextReadGroupIndex:
+                    seenIds = readGroupSeenIdsList + [read.id]
+                else:
+                    seenIds = []
+                nextPageToken = "{}:{}:{}".format(
+                    nextReadGroupIndex, nextReadPos, seenIds)
+                yield read, nextPageToken
+        except StopIteration:
+            if read is not None:
+                yield read, None
 
     def variantsGenerator(self, request):
         """
