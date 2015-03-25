@@ -221,62 +221,56 @@ class AbstractBackend(object):
             request, self._variantSetIdMap, self._variantSetIds)
 
     def readsGenerator(self, request):
-        def readsGeneratorInternal(request):
-            def parseReadPageToken(pageToken):
-                firstColonIndex = pageToken.find(':')
-                secondColonIndex = pageToken[
-                    firstColonIndex + 1:].find(':') + firstColonIndex + 1
-                readGroupStartIndex = int(
-                    pageToken[:firstColonIndex])
-                readStartIndex = int(
-                    pageToken[firstColonIndex + 1:secondColonIndex])
-                seenIdsList = ast.literal_eval(
-                    pageToken[secondColonIndex + 1:])
-                return readGroupStartIndex, readStartIndex, seenIdsList
-            readGroupIds = request.readGroupIds
-            if len(readGroupIds) == 0:
-                readGroupIds = self._readGroupIds
-            readGroupStartIndex = 0
-            readStartIndex = request.start
-            seenIdsList = []
-            if request.pageToken is not None:
-                readGroupStartIndex, readStartIndex, seenIdsList = \
-                    parseReadPageToken(request.pageToken)
-            seenIds = set(seenIdsList)
-            for readGroupIndex in range(
-                    readGroupStartIndex, len(readGroupIds)):
-                readGroupId = readGroupIds[readGroupIndex]
-                readGroup = self._readGroupIdMap[readGroupId]
-                iterator = readGroup.getReadAlignments(
-                    request.referenceName, request.referenceId,
-                    readStartIndex, request.end)
-                for read in iterator:
-                    if read.id not in seenIds:
-                        yield read, readGroupIndex, seenIdsList
+        # Local utility function to save some typing
+        def getPosition(readAlignment):
+            return readAlignment.alignment.position.position
 
-        iterator = readsGeneratorInternal(request)
-        read = None
-        nextRead = None
-        seenIds = []
-        try:
-            while True:
-                if nextRead is None:
-                    read, readGroupIndex, readGroupSeenIdsList = \
-                        iterator.next()
+        if len(request.readGroupIds) != 1:
+            raise exceptions.NotImplementedException(
+                "Read search over multiple readGroups not supported")
+        readGroup = self._readGroupIdMap[request.readGroupIds[0]]
+        startPosition = request.start
+        equalPositionsToSkip = 0
+        if request.pageToken is not None:
+            startPosition, equalPositionsToSkip = self.parsePageToken(
+                request.pageToken, 2)
+        iterator = readGroup.getReadAlignments(
+            request.referenceName, request.referenceId, startPosition,
+            request.end)
+        readAlignment = next(iterator, None)
+        if request.pageToken is not None:
+            # First, skip any reads with position < startPosition
+            while getPosition(readAlignment) < startPosition:
+                readAlignment = next(iterator, None)
+                if readAlignment is None:
+                    raise exceptions.BadPageTokenException(
+                        "Inconsistent page token provided")
+            # Now, skip equalPositionsToSkip records which have position
+            # == startPosition
+            equalPositionsSkipped = 0
+            while equalPositionsSkipped < equalPositionsToSkip:
+                if getPosition(readAlignment) != startPosition:
+                    raise exceptions.BadPageTokenException(
+                        "Inconsistent page token provided")
+                equalPositionsSkipped += 1
+                readAlignment = next(iterator, None)
+                if readAlignment is None:
+                    raise exceptions.BadPageTokenException(
+                        "Inconsistent page token provided")
+        # The iterator is now positioned at the correct place.
+        while readAlignment is not None:
+            nextReadAlignment = next(iterator, None)
+            nextPageToken = None
+            if nextReadAlignment is not None:
+                if getPosition(readAlignment) == getPosition(nextReadAlignment):
+                    equalPositionsToSkip += 1
                 else:
-                    read = nextRead
-                nextRead, nextReadGroupIndex, _ = iterator.next()
-                nextReadPos = nextRead.alignment.position.position
-                if readGroupIndex == nextReadGroupIndex:
-                    seenIds = readGroupSeenIdsList + [read.id]
-                else:
-                    seenIds = []
-                nextPageToken = "{}:{}:{}".format(
-                    nextReadGroupIndex, nextReadPos, seenIds)
-                yield read, nextPageToken
-        except StopIteration:
-            if read is not None:
-                yield read, None
+                    equalPositionsToSkip = 0
+                nextPageToken = "{}:{}".format(
+                    getPosition(nextReadAlignment), equalPositionsToSkip)
+            yield readAlignment, nextPageToken
+            readAlignment = nextReadAlignment
+
 
     def variantsGenerator(self, request):
         """

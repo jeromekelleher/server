@@ -460,7 +460,11 @@ class SearchReadsRunner(AbstractSearchRunner):
         self._setRequest(request, args)
 
     def run(self):
-        self._run(self._httpClient.searchReads, 'id')
+        for readAlignment in self._httpClient.searchReads(self._request):
+            position = readAlignment.alignment.position
+            print(
+                readAlignment.id, position.position, position.referenceName,
+                sep="\t")
 
 
 class ListReferenceBasesRunner(AbstractSearchRunner):

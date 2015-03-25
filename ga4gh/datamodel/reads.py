@@ -170,7 +170,7 @@ class SimulatedReadGroup(AbstractReadGroup):
 
     def getReadAlignments(self, referenceName=None, referenceId=None,
                           start=None, end=None):
-        for i in range(2):
+        for i in range(100):
             alignment = self._createReadAlignment(i)
             yield alignment
 
@@ -181,7 +181,7 @@ class SimulatedReadGroup(AbstractReadGroup):
         alignment.alignedQuality = [1, 2, 3]
         alignment.alignedSequence = "ACT"
         gaPosition = protocol.GAPosition()
-        gaPosition.position = 0
+        gaPosition.position = i
         gaPosition.referenceName = "whatevs"
         gaPosition.reverseStrand = False
         gaLinearAlignment = protocol.GALinearAlignment()
@@ -223,12 +223,16 @@ class HtslibReadGroup(AbstractReadGroup):
         """
         Returns an iterator over the specified reads
         """
-        if referenceName is not None and referenceId is not None:
-            raise exceptions.BadReadsSearchRequestBothRefs()
+        encodedReferenceName = None
         if referenceId is not None:
-            referenceName = self._samFile.getrname(referenceId)
+            encodedReferenceId = referenceId.encode()
+            encodedReferenceName = self._samFile.getrname(encodedReferenceId)
+        elif referenceName is not None:
+            encodedReferenceName = referenceName.encode()
+        elif referenceName is not None and referenceId is not None:
+            raise exceptions.BadReadsSearchRequestBothRefs()
         # TODO deal with errors from htslib
-        readAlignments = self._samFile.fetch(referenceName, start, end)
+        readAlignments = self._samFile.fetch(encodedReferenceName, start, end)
         for readAlignment in readAlignments:
             yield self.convertReadAlignment(readAlignment)
 
