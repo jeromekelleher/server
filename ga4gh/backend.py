@@ -341,22 +341,14 @@ class AbstractBackend(object):
             raise exceptions.InvalidJsonException(requestStr)
         self.validateRequest(requestDict, requestClass)
         request = requestClass.fromJsonDict(requestDict)
-        if request.pageSize is None:
-            request.pageSize = self._defaultPageSize
-        if request.pageSize <= 0:
-            raise exceptions.BadPageSizeException(request.pageSize)
-        responseBuilder = protocol.SearchResponseBuilder(
-            responseClass, request.pageSize, self._maxResponseLength)
-        nextPageToken = None
+        message = '{{"type":"type", "class":"{}"}}\n'.format(responseClass.__name__)
+        yield message
         for obj, nextPageToken in objectGenerator(request):
-            responseBuilder.addValue(obj)
-            if responseBuilder.isFull():
-                break
-        responseBuilder.setNextPageToken(nextPageToken)
-        responseString = responseBuilder.getJsonString()
-        self.validateResponse(responseString, responseClass)
+            jsonString = obj.toJsonString()
+            self.validateResponse(jsonString, responseClass)
+            message = '{{"type":"data", "object":{}}}\n'.format(jsonString)
+            yield message
         self.endProfile()
-        return responseString
 
     def searchReadGroupSets(self, request):
         """
@@ -365,8 +357,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchReadGroupSetsRequest,
-            protocol.SearchReadGroupSetsResponse,
-            self.readGroupSetsGenerator)
+            protocol.ReadGroupSet, self.readGroupSetsGenerator)
 
     def searchReads(self, request):
         """
@@ -375,8 +366,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchReadsRequest,
-            protocol.SearchReadsResponse,
-            self.readsGenerator)
+            protocol.ReadAlignment, self.readsGenerator)
 
     def searchReferenceSets(self, request):
         """
@@ -385,8 +375,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchReferenceSetsRequest,
-            protocol.SearchReferenceSetsResponse,
-            self.referenceSetsGenerator)
+            protocol.ReferenceSet, self.referenceSetsGenerator)
 
     def searchReferences(self, request):
         """
@@ -395,8 +384,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchReferencesRequest,
-            protocol.SearchReferencesResponse,
-            self.referencesGenerator)
+            protocol.Reference, self.referencesGenerator)
 
     def searchVariantSets(self, request):
         """
@@ -405,8 +393,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchVariantSetsRequest,
-            protocol.SearchVariantSetsResponse,
-            self.variantSetsGenerator)
+            protocol.VariantSet, self.variantSetsGenerator)
 
     def searchVariants(self, request):
         """
@@ -415,8 +402,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchVariantsRequest,
-            protocol.SearchVariantsResponse,
-            self.variantsGenerator)
+            protocol.Variant, self.variantsGenerator)
 
     def searchCallSets(self, request):
         """
@@ -425,8 +411,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchCallSetsRequest,
-            protocol.SearchCallSetsResponse,
-            self.callSetsGenerator)
+            protocol.CallSet, self.callSetsGenerator)
 
     def searchDatasets(self, request):
         """
@@ -435,8 +420,7 @@ class AbstractBackend(object):
         """
         return self.runSearchRequest(
             request, protocol.SearchDatasetsRequest,
-            protocol.SearchDatasetsResponse,
-            self.datasetsGenerator)
+            protocol.Dataset, self.datasetsGenerator)
 
     # Iterators over the data hieararchy
 

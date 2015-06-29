@@ -99,14 +99,6 @@ class HttpClient(object):
     def _updateBytesRead(self, jsonString):
         self._bytesRead += len(jsonString)
 
-    def _deserializeResponse(self, response, protocolResponseClass):
-        jsonResponseString = response.text
-        self._updateBytesRead(jsonResponseString)
-        self._debugResponse(jsonResponseString)
-        responseObject = protocolResponseClass.fromJsonString(
-            jsonResponseString)
-        return responseObject
-
     def _updateNotDone(self, responseObject, protocolRequest):
         if hasattr(responseObject, 'nextPageToken'):
             protocolRequest.pageToken = responseObject.nextPageToken
@@ -127,10 +119,22 @@ class HttpClient(object):
         if httpData is not None:
             headers.update({"Content-type": "application/json"})
             self._debugRequest(httpData)
+        headers["Transfer-Encoding"] = "chunked"
         response = requests.request(
-            httpMethod, url, params=params, data=httpData, headers=headers)
+            httpMethod, url, params=params, data=httpData, headers=headers,
+            stream=True)
         self._checkStatus(response)
-        return self._deserializeResponse(response, protocolResponseClass)
+        responseClass = None
+        for line in response.iter_lines(delimiter="\n"):
+            self._updateBytesRead(line)
+            # The last line in the stream is some times empty; not sure why
+            if len(line) > 0:
+                message = json.loads(line)
+                if message["type"] == "type":
+                    responseClass = getattr(protocol, message["class"])
+                elif message["type"] == "data":
+                    yield responseClass.fromJsonDict(message["object"])
+
 
     def runSearchRequest(self, protocolRequest, objectName,
                          protocolResponseClass):
@@ -141,17 +145,9 @@ class HttpClient(object):
         pageToken is null.
         """
         fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
-        notDone = True
-        while notDone:
-            data = protocolRequest.toJsonString()
-            responseObject = self._doRequest(
-                'POST', fullUrl, protocolResponseClass, httpData=data)
-            valueList = getattr(
-                responseObject, protocolResponseClass.getValueListName())
-            self._logger.info("Response pageSize={}".format(len(valueList)))
-            for extract in valueList:
-                yield extract
-            notDone = self._updateNotDone(responseObject, protocolRequest)
+        data = protocolRequest.toJsonString()
+        return self._doRequest(
+            'POST', fullUrl, protocolResponseClass, httpData=data)
 
     def runListRequest(self, protocolRequest, url,
                        protocolResponseClass, id_):

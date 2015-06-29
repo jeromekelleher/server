@@ -230,11 +230,11 @@ def configure(configFile=None, baseConfig="ProductionConfig", extraConfig={}):
     app.backend = theBackend
 
 
-def getFlaskResponse(responseString, httpStatus=200):
+def getFlaskResponse(response, httpStatus=200):
     """
     Returns a Flask response object for the specified data and HTTP status.
     """
-    return flask.Response(responseString, status=httpStatus, mimetype=MIMETYPE)
+    return flask.Response(response, status=httpStatus, mimetype=MIMETYPE)
 
 
 def handleHttpPost(request, endpoint):
@@ -244,8 +244,8 @@ def handleHttpPost(request, endpoint):
     """
     if request.mimetype != MIMETYPE:
         raise exceptions.UnsupportedMediaTypeException()
-    responseStr = endpoint(request.get_data())
-    return getFlaskResponse(responseStr)
+    response = endpoint(request.get_data())
+    return getFlaskResponse(response)
 
 
 def handleList(id_, endpoint, request):
