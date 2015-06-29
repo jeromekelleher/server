@@ -119,10 +119,12 @@ class HttpClient(object):
         if httpData is not None:
             headers.update({"Content-type": "application/json"})
             self._debugRequest(httpData)
-        headers["Transfer-Encoding"] = "chunked"
         response = requests.request(
             httpMethod, url, params=params, data=httpData, headers=headers,
             stream=True)
+        print("Response header:")
+        for k, v in response.headers.items():
+            print("\t", k, "->", v)
         self._checkStatus(response)
         responseClass = None
         for line in response.iter_lines(delimiter="\n"):
