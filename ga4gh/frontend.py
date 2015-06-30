@@ -33,7 +33,8 @@ cherrypy.tools.allow = cherrypy.Tool('on_start_resource', http_methods_allowed)
 def handlePostRequest(handler):
     cl = cherrypy.request.headers['Content-Length']
     body = cherrypy.request.body.read(int(cl))
-    return handler(body)
+    acceptEncoding = cherrypy.request.headers['Accept-Encoding']
+    return handler(body, acceptEncoding)
 
 class Ga4ghProtocol(object):
 

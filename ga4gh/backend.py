@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 
 import os
 import json
+import struct
 
 import ga4gh.protocol as protocol
 import ga4gh.datamodel.references as references
@@ -323,8 +324,16 @@ class AbstractBackend(object):
         jsonString = protocolElement.toJsonString()
         return jsonString
 
+    def toWireFormat(self, typeCode, message):
+        """
+        Returns a bytes object containing the wire format representation
+        of the specified message.
+        """
+        return struct.pack("!cI", typeCode, len(message)) + message
+
     def runSearchRequest(
-            self, requestStr, requestClass, responseClass, objectGenerator):
+            self, requestStr, acceptEncoding, requestClass, responseClass,
+            objectGenerator):
         """
         Runs the specified request. The request is a string containing
         a JSON representation of an instance of the specified requestClass.
@@ -341,13 +350,12 @@ class AbstractBackend(object):
             raise exceptions.InvalidJsonException(requestStr)
         self.validateRequest(requestDict, requestClass)
         request = requestClass.fromJsonDict(requestDict)
-        message = '{{"type":"type", "class":"{}"}}\n'.format(responseClass.__name__)
-        yield message
+        typeObject = '{{"class":"{}"}}'.format(responseClass.__name__)
+        yield self.toWireFormat(b"T", typeObject.encode())
         for obj, nextPageToken in objectGenerator(request):
             jsonString = obj.toJsonString()
             self.validateResponse(jsonString, responseClass)
-            message = '{{"type":"data", "object":{}}}\n'.format(jsonString)
-            yield message
+            yield self.toWireFormat(b"D", jsonString.encode())
         self.endProfile()
 
     def searchReadGroupSets(self, request):
@@ -386,22 +394,22 @@ class AbstractBackend(object):
             request, protocol.SearchReferencesRequest,
             protocol.Reference, self.referencesGenerator)
 
-    def searchVariantSets(self, request):
+    def searchVariantSets(self, request, acceptEncoding):
         """
         Returns a GASearchVariantSetsResponse for the specified
         GASearchVariantSetsRequest object.
         """
         return self.runSearchRequest(
-            request, protocol.SearchVariantSetsRequest,
+            request, acceptEncoding, protocol.SearchVariantSetsRequest,
             protocol.VariantSet, self.variantSetsGenerator)
 
-    def searchVariants(self, request):
+    def searchVariants(self, request, acceptEncoding):
         """
         Returns a GASearchVariantsResponse for the specified
         GASearchVariantsRequest object.
         """
         return self.runSearchRequest(
-            request, protocol.SearchVariantsRequest,
+            request, acceptEncoding, protocol.SearchVariantsRequest,
             protocol.Variant, self.variantsGenerator)
 
     def searchCallSets(self, request):
@@ -413,13 +421,13 @@ class AbstractBackend(object):
             request, protocol.SearchCallSetsRequest,
             protocol.CallSet, self.callSetsGenerator)
 
-    def searchDatasets(self, request):
+    def searchDatasets(self, request, acceptEncoding):
         """
         Returns a SearchDatasetsResponse object for the specified
         SearchDatasetsRequest Object.
         """
         return self.runSearchRequest(
-            request, protocol.SearchDatasetsRequest,
+            request, acceptEncoding, protocol.SearchDatasetsRequest,
             protocol.Dataset, self.datasetsGenerator)
 
     # Iterators over the data hieararchy

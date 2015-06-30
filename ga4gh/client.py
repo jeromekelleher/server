@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 import json
 import requests
 import posixpath
+import struct
 import logging
 
 import ga4gh.protocol as protocol
@@ -107,12 +108,24 @@ class HttpClient(object):
             notDone = False
         return notDone
 
+    def _decodeStream(self, response):
+        """
+        Returns a list of type code message pairs from the stream.
+        """
+        buff = response.raw.read(5)
+        while len(buff) > 0:
+            # The first 5 bytes are the message type and length
+            messageType, length = struct.unpack("!cI", buff)
+            message = response.raw.read(length)
+            yield messageType, message
+            buff = response.raw.read(5)
+
     def _doRequest(self, httpMethod, url, protocolResponseClass,
                    httpParams={}, httpData=None):
         """
         Performs a request to the server and returns the response
         """
-        headers = {}
+        headers = {"Accept-Encoding": "ga4gh+json"}
         params = self._getAuth()
         params.update(httpParams)
         self._logger.info("{0} {1}".format(httpMethod, url))
@@ -127,15 +140,12 @@ class HttpClient(object):
             print("\t", k, "->", v)
         self._checkStatus(response)
         responseClass = None
-        for line in response.iter_lines(delimiter="\n"):
-            self._updateBytesRead(line)
-            # The last line in the stream is some times empty; not sure why
-            if len(line) > 0:
-                message = json.loads(line)
-                if message["type"] == "type":
-                    responseClass = getattr(protocol, message["class"])
-                elif message["type"] == "data":
-                    yield responseClass.fromJsonDict(message["object"])
+        for typeCode, message in self._decodeStream(response):
+            if typeCode == "T":
+                d = json.loads(message)
+                responseClass = getattr(protocol, d["class"])
+            elif typeCode == "D":
+                yield responseClass.fromJsonString(message)
 
 
     def runSearchRequest(self, protocolRequest, objectName,
