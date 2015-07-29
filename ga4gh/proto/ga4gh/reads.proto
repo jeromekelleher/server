@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package ga4gh;
 
-import "proto/google/protobuf/struct.proto";
-import "proto/ga4gh/common.proto";
+import "ga4gh/proto/google/protobuf/struct.proto";
+import "ga4gh/proto/ga4gh/common.proto";
 
 service ReadService {
   // Searches for read group sets matching the criteria.

@@ -15,6 +15,7 @@ from cStringIO import StringIO
 from ga4gh.proto.ga4gh.common_pb2 import *  # NOQA
 from ga4gh.proto.ga4gh.variants_pb2 import *  # NOQA
 from ga4gh.proto.ga4gh.reads_pb2 import *  # NOQA
+from ga4gh.proto.ga4gh.datasets_pb2 import *  # NOQA
 from ga4gh.proto.ga4gh.references_pb2 import *  # NOQA
 
 

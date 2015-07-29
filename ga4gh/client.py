@@ -143,7 +143,7 @@ class HttpClient(object):
         fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
         notDone = True
         while notDone:
-            data = protocolRequest.toJsonString()
+            data = protocolRequest.SerializeToString()
             responseObject = self._doRequest(
                 'POST', fullUrl, protocolResponseClass, httpData=data)
             valueList = getattr(

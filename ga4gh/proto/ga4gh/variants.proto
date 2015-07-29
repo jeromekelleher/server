@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ga4gh;
 
-import "proto/google/protobuf/struct.proto";
+import "ga4gh/proto/google/protobuf/struct.proto";
 
 service VariantService {
   // Gets a variant set by ID.

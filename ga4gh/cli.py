@@ -33,9 +33,12 @@ AVRO_LONG_MAX = 2**31 - 1
 
 
 def setCommaSeparatedAttribute(request, args, attr):
+    # TODO document this function and possibly rename it as
+    # part of the proto conversion.
     attribute = getattr(args, attr)
     if attribute is not None:
-        setattr(request, attr, attribute.split(","))
+        proto_attr = getattr(request, attr)
+        proto_attr.extend(attribute.split(","))
 
 
 class RequestFactory(object):
@@ -74,19 +77,17 @@ class RequestFactory(object):
 
     def createSearchVariantsRequest(self):
         request = protocol.SearchVariantsRequest()
-        request.reference_name = self.args.reference_name
-        request.variant_name = self.args.variant_name
-        request.start = self.args.start
-        request.end = self.args.end
+        if self.args.reference_name is not None:
+            request.reference_name = self.args.reference_name
+        if self.args.variant_name is not None:
+            request.variant_name = self.args.variant_name
+        if self.args.start is not None:
+            request.start = self.args.start
+        if self.args.end is not None:
+            request.end = self.args.end
         if self.usingWorkaroundsFor(client.HttpClient.workaroundGoogle):
             request.maxCalls = self.args.maxCalls
-        if self.args.call_set_ids == []:
-            request.call_set_ids = []
-        elif self.args.call_set_ids == '*':
-            # For v0.5.1 the semantics are for the empty list to correspond
-            # to all calls. This should be set to None for v0.6
-            request.call_set_ids = []
-        else:
+        if self.args.call_set_ids not in ['*', []]:
             request.call_set_ids = self.args.call_set_ids.split(",")
         setCommaSeparatedAttribute(request, self.args, 'variant_set_ids')
         return request
@@ -382,19 +383,12 @@ class SearchVariantsRunner(AbstractSearchRunner):
         self._setRequest(request, args)
 
     def run(self):
-        # TODO this is a hack until we make a nicer interface to deal with
-        # multiple requests. The server does not support multiple values
-        # so we send of sequential requests instead.
-        request = self._request
-        variant_set_ids = request.variant_set_ids
-        for variant_set_id in variant_set_ids:
-            request.variant_set_ids = [variant_set_id]
-            if self._minimalOutput:
-                self._run(self._httpClient.searchVariants, 'id')
-            else:
-                results = self._httpClient.searchVariants(self._request)
-                for result in results:
-                    self.printVariant(result)
+        if self._minimalOutput:
+            self._run(self._httpClient.searchVariants, 'id')
+        else:
+            results = self._httpClient.searchVariants(self._request)
+            for result in results:
+                self.printVariant(result)
 
     def printVariant(self, variant):
         """
