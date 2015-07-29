@@ -466,8 +466,9 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
             metadata.key = key
             metadata.value = value
             metadata.id = id
-            metadata.type = type
-            metadata.number = number
+            # FIXME proto issues here.
+            # metadata.type = type
+            # metadata.number = number
             metadata.description = description
             return metadata
 

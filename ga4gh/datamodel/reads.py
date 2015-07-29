@@ -23,15 +23,16 @@ class SamCigar(object):
     # see http://pysam.readthedocs.org/en/latest/api.html
     # #pysam.AlignedSegment.cigartuples
     cigarStrings = [
-        protocol.CigarOperation.ALIGNMENT_MATCH,
-        protocol.CigarOperation.INSERT,
-        protocol.CigarOperation.DELETE,
-        protocol.CigarOperation.SKIP,
-        protocol.CigarOperation.CLIP_SOFT,
-        protocol.CigarOperation.CLIP_HARD,
-        protocol.CigarOperation.PAD,
-        protocol.CigarOperation.SEQUENCE_MATCH,
-        protocol.CigarOperation.SEQUENCE_MISMATCH,
+        # FIXME proto issues here.
+        # protocol.CigarOperation.ALIGNMENT_MATCH,
+        # protocol.CigarOperation.INSERT,
+        # protocol.CigarOperation.DELETE,
+        # protocol.CigarOperation.SKIP,
+        # protocol.CigarOperation.CLIP_SOFT,
+        # protocol.CigarOperation.CLIP_HARD,
+        # protocol.CigarOperation.PAD,
+        # protocol.CigarOperation.SEQUENCE_MATCH,
+        # protocol.CigarOperation.SEQUENCE_MISMATCH,
     ]
 
     @classmethod

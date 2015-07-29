@@ -12,7 +12,10 @@ import datetime
 import itertools
 from cStringIO import StringIO
 
-import avro.io
+from ga4gh.proto.ga4gh.common_pb2 import *  # NOQA
+from ga4gh.proto.ga4gh.variants_pb2 import *  # NOQA
+from ga4gh.proto.ga4gh.reads_pb2 import *  # NOQA
+from ga4gh.proto.ga4gh.references_pb2 import *  # NOQA
 
 
 def convertDatetime(t):
@@ -261,8 +264,3 @@ def getProtocolClasses(superclass=ProtocolElement):
                 class_ not in superclasses)):
             subclasses.append(class_)
     return subclasses
-
-
-# We can now import the definitions of the protocol elements from the
-# generated file.
-from _protocol_definitions import *  # NOQA

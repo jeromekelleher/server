@@ -13,7 +13,7 @@ from google.protobuf import descriptor_pb2
 _sym_db = _symbol_database.Default()
 
 
-from proto.google.protobuf import struct_pb2 as proto_dot_google_dot_protobuf_dot_struct__pb2
+from ga4gh.proto.google.protobuf import struct_pb2 as proto_dot_google_dot_protobuf_dot_struct__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
