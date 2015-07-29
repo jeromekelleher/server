@@ -290,7 +290,8 @@ def handleException(exception):
     serverException = exception
     if not isinstance(exception, exceptions.BaseServerException):
         serverException = exceptions.getServerError(exception)
-    responseStr = serverException.toProtocolElement().toJsonString()
+    error = serverException.toProtocolElement()
+    responseStr = error.SerializeToString()
     return getFlaskResponse(responseStr, serverException.httpStatus)
 
 

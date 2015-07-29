@@ -2,6 +2,16 @@ syntax = "proto3";
 
 package ga4gh;
 
+
+// Temporary definition of exception class not included in initial
+// code drop.
+message GAException {
+
+    int32 error_code = 1;
+    string message = 2;
+}
+
+
 // A single CIGAR operation.
 message CigarUnit {
   // Describes the different types of CIGAR alignment operations that exist.

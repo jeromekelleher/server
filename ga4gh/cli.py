@@ -53,7 +53,7 @@ class RequestFactory(object):
         def __init__(self):
             self.end = None
             self.page_size = None
-            self.page_token = None
+            self.page_token = 0
             self.read_group_ids = []
             self.reference_name = None
             self.start = 0
@@ -72,7 +72,6 @@ class RequestFactory(object):
         request = protocol.SearchVariantSetsRequest()
         setCommaSeparatedAttribute(request, self.args, 'dataset_ids')
         request.page_size = self.args.page_size
-        request.page_token = None
         return request
 
     def createSearchVariantsRequest(self):
@@ -378,8 +377,6 @@ class SearchVariantsRunner(AbstractSearchRunner):
                     variantSet.id for variantSet in response]
                 variant_set_ids.extend(datasetVariantSetIds)
             request.variant_set_ids = variant_set_ids
-        else:
-            setCommaSeparatedAttribute(request, args, 'variant_set_ids')
         self._setRequest(request, args)
 
     def run(self):

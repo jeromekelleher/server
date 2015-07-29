@@ -91,7 +91,11 @@ class HttpClient(object):
 
     def _checkStatus(self, response):
         if response.status_code != requests.codes.ok:
-            self._logger.error("%s %s", response.status_code, response.text)
+            error = protocol.GAException()
+            error.ParseFromString(response.content)
+            self._logger.error(
+                "%s:%s:%s", response.status_code, error.error_code,
+                error.message)
             # TODO use custom exception instead of Exception
             raise Exception("Url {0} had status_code {1}".format(
                 response.url, response.status_code))
@@ -100,7 +104,7 @@ class HttpClient(object):
         self._bytesRead += len(jsonString)
 
     def _deserializeResponse(self, response, protocolResponseClass):
-        jsonResponseString = response.text
+        jsonResponseString = response.content
         self._updateBytesRead(jsonResponseString)
         self._debugResponse(jsonResponseString)
         responseObject = protocolResponseClass.fromJsonString(

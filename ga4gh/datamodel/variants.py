@@ -145,8 +145,9 @@ class AbstractVariantSet(datamodel.DatamodelObject):
         protocolElement = protocol.VariantSet()
         protocolElement.id = self._id
         protocolElement.dataset_id = "NotImplemented"
-        protocolElement.reference_set_id = self._reference_set_id
-        protocolElement.metadata = self.getMetadata()
+        # TODO fixme -- proto issues.
+        # protocolElement.reference_set_id = self._reference_set_id
+        # protocolElement.metadata = self.getMetadata()
         return protocolElement
 
     def getId(self):

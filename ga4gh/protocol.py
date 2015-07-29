@@ -53,6 +53,7 @@ class SearchResponseBuilder(object):
         self._valueListBuffer = StringIO()
         self._numElements = 0
         self._next_page_token = None
+        self._protoObject = responseClass()
 
     def getPageSize(self):
         """
@@ -89,33 +90,50 @@ class SearchResponseBuilder(object):
         Appends the specified protocolElement to the value list for this
         response.
         """
-        if self._numElements > 0:
-            self._valueListBuffer.write(", ")
+        # if self._numElements > 0:
+        #     self._valueListBuffer.write(", ")
+        # self._numElements += 1
+        # self._valueListBuffer.write(protocolElement.toJsonString())
+        # TODO This interface doesn't really work any more...
         self._numElements += 1
-        self._valueListBuffer.write(protocolElement.toJsonString())
+        attr = getattr(
+            self._protoObject, self._responseClass.getValueListName())
+        obj = attr.add()
+        obj.CopyFrom(protocolElement)
 
     def isFull(self):
         """
         Returns True if the response buffer is full, and False otherwise.
         The buffer is full if either (1) the number of items in the value
-        list is >= page_size or (2) the total length of the serialised
+        list is >= pageSize or (2) the total length of the serialised
         elements in the page is >= maxResponseLength.
         """
+        s = self._protoObject.SerializeToString()
         return (
-            self._numElements >= self._page_size or
-            self._valueListBuffer.tell() >= self._maxResponseLength)
+            self._numElements >= self._pageSize or
+            len(s) >= self._maxResponseLength)
+        # self._valueListBuffer.tell() >= self._maxResponseLength)
 
     def getJsonString(self):
         """
         Returns a string version of the SearchResponse that has
         been built by this SearchResponseBuilder. This is a fully
-        formed JSON document, and consists of the page_token and
+        formed JSON document, and consists of the pageToken and
         the value list.
         """
-        pageListString = "[{}]".format(self._valueListBuffer.getvalue())
-        return '{{"next_page_token": {},"{}": {}}}'.format(
-            json.dumps(self._next_page_token),
-            self._responseClass.getValueListName(), pageListString)
+        # pageListString = "[{}]".format(self._valueListBuffer.getvalue())
+        # return '{{"nextPageToken": {},"{}": {}}}'.format(
+        #     json.dumps(self._nextPageToken),
+        #     self._responseClass.getValueListName(), pageListString)
+        if self._nextPageToken is None:
+            self._nextPageToken = ""
+        self._protoObject.next_page_token = self._nextPageToken
+        s = self._protoObject.SerializeToString()
+        print("Returning ", len(s), self._responseClass)
+        obj = self._responseClass()
+        obj.ParseFromString(s)
+        print(type(s))
+        return s
 
 
 class ProtocolElementEncoder(json.JSONEncoder):

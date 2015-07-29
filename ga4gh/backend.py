@@ -311,7 +311,7 @@ class AbstractBackend(object):
         response.offset = start
         response.sequence = sequence
         response.next_page_token = next_page_token
-        return response.toJsonString()
+        return response.SerializeToString()
 
     def runGetRequest(self, idMap, id_):
         """
@@ -323,7 +323,7 @@ class AbstractBackend(object):
         except KeyError:
             raise exceptions.ObjectWithIdNotFoundException(id_)
         protocolElement = obj.toProtocolElement()
-        jsonString = protocolElement.toJsonString()
+        jsonString = protocolElement.SerializeToString()
         return jsonString
 
     def runSearchRequest(
@@ -338,14 +338,13 @@ class AbstractBackend(object):
         any point using the next_page_token attribute of the request object.
         """
         self.startProfile()
-        try:
-            requestDict = json.loads(requestStr)
-        except ValueError:
-            raise exceptions.InvalidJsonException(requestStr)
-        self.validateRequest(requestDict, requestClass)
-        request = requestClass.fromJsonDict(requestDict)
-        if request.page_size is None:
-            request.page_size = self._defaultPageSize
+        request = requestClass()
+        # TODO add a try/catch here to deal with malformed input.
+        request.ParseFromString(requestStr)
+        print("request = ", request)
+        # TODO FIXME --- don't know why this doesn't work.
+        # if not request.HasField("page_size"):
+        #     request.page_size = self._defaultPageSize
         if request.page_size <= 0:
             raise exceptions.BadPageSizeException(request.page_size)
         responseBuilder = protocol.SearchResponseBuilder(
@@ -449,7 +448,7 @@ class AbstractBackend(object):
         of the data hierarchy.
         """
         currentIndex = 0
-        if request.page_token is not None:
+        if len(request.page_token) > 0:
             currentIndex, = _parsePageToken(request.page_token, 1)
         while currentIndex < len(idList):
             objectId = idList[currentIndex]
