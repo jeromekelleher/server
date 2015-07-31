@@ -400,8 +400,12 @@ class SearchVariantsRunner(AbstractSearchRunner):
             print(key, value, sep="=", end=";")
         print("\t", end="")
         for c in variant.calls:
+            info = "{"
+            for k, v in c.info.items():
+                info += "{}:{}, ".format(k, v)
+            info += "}"
             print(
-                c.callSetId, c.genotype, c.genotypeLikelihood, c.info,
+                c.genotype, c.genotype_likelihood, info,
                 c.phaseset, sep=":", end="\t")
         print()
 

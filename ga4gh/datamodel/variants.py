@@ -340,18 +340,18 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
                 self._updateCallSetIds(varFile)
                 self._chromFileMap[chrom] = varFile
 
-    def _convertGaCall(self, recordId, name, pysamCall, genotypeData):
+    def _convertGaCall(self, call, recordId, name, pysamCall, genotypeData):
         callSet = self.getCallSet(name)
-        call = protocol.Call()
-        call.callSetId = callSet.getId()
-        call.callSetName = callSet.getSampleName()
-        call.sampleId = callSet.getSampleName()
+        call.call_set_id = callSet.getId()
+        call.call_set_name = callSet.getSampleName()
+        # call.sample_id = callSet.getSampleName()
         # TODO:
         # NOTE: THE FOLLOWING TWO LINES IS NOT THE INTENED IMPLEMENTATION,
         ###########################################
-        call.phaseset = None
-        call.genotype, call.phaseset = convertVCFGenotype(
-            genotypeData, call.phaseset)
+        # call.phaseset = None
+        genotype, phaseset = convertVCFGenotype(genotypeData, call.phaseset)
+        call.genotype.extend(genotype)
+        call.phaseset = phaseset
         ###########################################
 
         # THEY SHOULD BE REPLACED BY THE FOLLOWING, ONCE NEW PYSAM
@@ -363,13 +363,12 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
         # call.phaseset = pysamCall.phaseset
         ###########################################
 
-        call.genotypeLikelihood = []
+        call.genotype_likelihood
         for key, value in pysamCall.iteritems():
             if key == 'GL' and value is not None:
-                call.genotypeLikelihood = list(value)
+                call.genotypeLikelihood.extend(list(value))
             elif key != 'GT':
                 call.info[key] = _encodeValue(value)
-        return call
 
     def convertVariant(self, record, call_set_ids):
         """
@@ -385,30 +384,36 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
                                           record.pos)
         variant.reference_name = record.contig
         if record.id is not None:
-            variant.names = record.id.split(';')
+            variant.names.extend(record.id.split(';'))
         variant.start = record.start          # 0-based inclusive
         variant.end = record.stop             # 0-based exclusive
         variant.reference_bases = record.ref
         if record.alts is not None:
-            variant.alternate_bases = list(record.alts)
+            variant.alternate_bases.extend(record.alts)
         # record.filter and record.qual are also available, when supported
         # by GAVariant.
         for key, value in record.info.iteritems():
             if value is not None:
-                variant.info[key] = _encodeValue(value)
+                # This creates a new value
+                v = variant.info[key]
+                if v is None:  # Just to keep the flake8 happy.
+                    print(v)
+                # TODO how do we add values into this list??
+                # for u in _encodeValue(value):
+                #     v.add(u)
 
         # NOTE: THE LABELED LINES SHOULD BE REMOVED ONCE PYSAM SUPPORTS
         # phaseset
 
         sampleData = record.__str__().split()[9:]  # REMOVAL
-        variant.calls = []
         sampleIterator = 0  # REMOVAL
         for name, call in record.samples.iteritems():
             if self.getCallSetId(name) in call_set_ids:
                 genotypeData = sampleData[sampleIterator].split(
                     ":")[0]  # REMOVAL
-                variant.calls.append(self._convertGaCall(
-                    record.id, name, call, genotypeData))  # REPLACE
+                gaCall = variant.calls.add()
+                self._convertGaCall(
+                    gaCall, record.id, name, call, genotypeData)  # REPLACE
             sampleIterator += 1  # REMOVAL
         return variant
 
@@ -418,7 +423,7 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
         Returns an iterator over the specified variants. The parameters
         correspond to the attributes of a GASearchVariantsRequest object.
         """
-        if variant_name is not None:
+        if variant_name is not '':
             raise exceptions.NotImplementedException(
                 "Searching by variant_name is not supported")
         # For v0.5.1, call_set_ids=[] actually means return all call_sets.

@@ -70,7 +70,7 @@ class IntervalIterator(object):
         self._nextObject = None
         self._searchAnchor = None
         self._distanceFromAnchor = None
-        if request.page_token is None:
+        if request.page_token is '':
             self._initialiseIteration()
         else:
             # Set the search start point and the number of records to skip from
@@ -341,10 +341,8 @@ class AbstractBackend(object):
         request = requestClass()
         # TODO add a try/catch here to deal with malformed input.
         request.ParseFromString(requestStr)
-        print("request = ", request)
-        # TODO FIXME --- don't know why this doesn't work.
-        # if not request.HasField("page_size"):
-        #     request.page_size = self._defaultPageSize
+        # TODO How do we detect when the page size is not set?
+        # Proto3 doesn't support HasField any more for some reason.
         if request.page_size <= 0:
             raise exceptions.BadPageSizeException(request.page_size)
         responseBuilder = protocol.SearchResponseBuilder(
@@ -355,7 +353,7 @@ class AbstractBackend(object):
             if responseBuilder.isFull():
                 break
         responseBuilder.setNextPageToken(next_page_token)
-        responseString = responseBuilder.getJsonString()
+        responseString = responseBuilder.getSerializedResponse()
         self.validateResponse(responseString, responseClass)
         self.endProfile()
         return responseString
@@ -448,7 +446,7 @@ class AbstractBackend(object):
         of the data hierarchy.
         """
         currentIndex = 0
-        if len(request.page_token) > 0:
+        if request.page_token is not '':
             currentIndex, = _parsePageToken(request.page_token, 1)
         while currentIndex < len(idList):
             objectId = idList[currentIndex]

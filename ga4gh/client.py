@@ -104,20 +104,12 @@ class HttpClient(object):
         self._bytesRead += len(jsonString)
 
     def _deserializeResponse(self, response, protocolResponseClass):
-        jsonResponseString = response.content
-        self._updateBytesRead(jsonResponseString)
-        self._debugResponse(jsonResponseString)
-        responseObject = protocolResponseClass.fromJsonString(
-            jsonResponseString)
+        responseString = response.content
+        self._updateBytesRead(responseString)
+        self._debugResponse(responseString)
+        responseObject = protocolResponseClass()
+        responseObject.ParseFromString(responseString)
         return responseObject
-
-    def _updateNotDone(self, responseObject, protocolRequest):
-        if hasattr(responseObject, 'next_page_token'):
-            protocolRequest.page_token = responseObject.next_page_token
-            notDone = responseObject.next_page_token is not None
-        else:
-            notDone = False
-        return notDone
 
     def _doRequest(self, httpMethod, url, protocolResponseClass,
                    httpParams={}, httpData=None):
@@ -151,11 +143,13 @@ class HttpClient(object):
             responseObject = self._doRequest(
                 'POST', fullUrl, protocolResponseClass, httpData=data)
             valueList = getattr(
-                responseObject, protocolResponseClass.getValueListName())
+                responseObject,
+                protocol.getValueListName(protocolResponseClass))
             self._logger.info("Response page_size={}".format(len(valueList)))
             for extract in valueList:
                 yield extract
-            notDone = self._updateNotDone(responseObject, protocolRequest)
+            protocolRequest.page_token = responseObject.next_page_token
+            notDone = responseObject.next_page_token is not ''
 
     def runListRequest(self, protocolRequest, url,
                        protocolResponseClass, id_):
