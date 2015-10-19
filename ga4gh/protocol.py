@@ -5,6 +5,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import google.protobuf.json_format as json_format
+
 from ga4gh.proto.ga4gh.common_pb2 import *  # NOQA
 from ga4gh.proto.ga4gh.variants_pb2 import *  # NOQA
 from ga4gh.proto.ga4gh.reads_pb2 import *  # NOQA
@@ -17,6 +19,8 @@ _valueListNameMap = {
     SearchVariantSetsResponse: "variant_sets",
     SearchVariantsResponse: "variants",
 }
+
+version = "0.5.proto_experiment"
 
 
 def getValueListName(protocolResponseClass):
@@ -117,5 +121,6 @@ class SearchResponseBuilder(object):
         if self._next_page_token is None:
             self._next_page_token = ""
         self._protoObject.next_page_token = self._next_page_token
-        s = self._protoObject.SerializeToString()
+        # s = self._protoObject.SerializeToString()
+        s = json_format.MessageToJson(self._protoObject)
         return s

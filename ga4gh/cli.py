@@ -45,19 +45,6 @@ class RequestFactory(object):
     """
     Provides methods for easy initialization of request objects
     """
-    class SearchReadsRequestGoogle(protocol.ProtocolElement):
-
-        __slots__ = ['end', 'page_size', 'page_token', 'read_group_ids',
-                     'reference_name', 'start']
-
-        def __init__(self):
-            self.end = None
-            self.page_size = None
-            self.page_token = 0
-            self.read_group_ids = []
-            self.reference_name = None
-            self.start = 0
-
     def __init__(self, args):
         self.args = args
         self.workarounds = getWorkarounds(args)
@@ -466,18 +453,6 @@ class SearchReadsRunner(AbstractSearchRunner):
     """
     Runner class for the reads/search method
     """
-    class SearchReadsRequestGoogle(protocol.ProtocolElement):
-
-        __slots__ = ['end', 'page_size', 'page_token', 'read_group_ids',
-                     'reference_name', 'start']
-
-        def __init__(self):
-            self.end = None
-            self.page_size = None
-            self.page_token = None
-            self.read_group_ids = []
-            self.reference_name = None
-            self.start = 0
 
     def __init__(self, args):
         super(SearchReadsRunner, self).__init__(args)

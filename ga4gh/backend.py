@@ -10,6 +10,8 @@ import os
 import json
 import random
 
+import google.protobuf.json_format as json_format
+
 import ga4gh.protocol as protocol
 import ga4gh.datamodel.references as references
 import ga4gh.exceptions as exceptions
@@ -311,7 +313,8 @@ class AbstractBackend(object):
         response.offset = start
         response.sequence = sequence
         response.next_page_token = next_page_token
-        return response.SerializeToString()
+        # return response.SerializeToString()
+        return json_format.MessageToJson(response)
 
     def runGetRequest(self, idMap, id_):
         """
@@ -323,7 +326,8 @@ class AbstractBackend(object):
         except KeyError:
             raise exceptions.ObjectWithIdNotFoundException(id_)
         protocolElement = obj.toProtocolElement()
-        jsonString = protocolElement.SerializeToString()
+        # jsonString = protocolElement.SerializeToString()
+        jsonString = json_format.MessageToJson(protocolElement)
         return jsonString
 
     def runSearchRequest(
@@ -340,7 +344,8 @@ class AbstractBackend(object):
         self.startProfile()
         request = requestClass()
         # TODO add a try/catch here to deal with malformed input.
-        request.ParseFromString(requestStr)
+        # request.ParseFromString(requestStr)
+        json_format.Parse(requestStr, request)
         # TODO How do we detect when the page size is not set?
         # Proto3 doesn't support HasField any more for some reason.
         if request.page_size <= 0:

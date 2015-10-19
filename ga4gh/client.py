@@ -10,6 +10,8 @@ import requests
 import posixpath
 import logging
 
+import google.protobuf.json_format as json_format
+
 import ga4gh.protocol as protocol
 
 
@@ -92,7 +94,8 @@ class HttpClient(object):
     def _checkStatus(self, response):
         if response.status_code != requests.codes.ok:
             error = protocol.GAException()
-            error.ParseFromString(response.content)
+            # error.ParseFromString(response.content)
+            json_format.Parse(response.content, error)
             self._logger.error(
                 "%s:%s:%s", response.status_code, error.error_code,
                 error.message)
@@ -108,7 +111,8 @@ class HttpClient(object):
         self._updateBytesRead(responseString)
         self._debugResponse(responseString)
         responseObject = protocolResponseClass()
-        responseObject.ParseFromString(responseString)
+        # responseObject.ParseFromString(responseString)
+        json_format.Parse(responseString, responseObject)
         return responseObject
 
     def _doRequest(self, httpMethod, url, protocolResponseClass,
@@ -139,7 +143,8 @@ class HttpClient(object):
         fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
         notDone = True
         while notDone:
-            data = protocolRequest.SerializeToString()
+            # data = protocolRequest.SerializeToString()
+            data = json_format.MessageToJson(protocolRequest)
             responseObject = self._doRequest(
                 'POST', fullUrl, protocolResponseClass, httpData=data)
             valueList = getattr(
