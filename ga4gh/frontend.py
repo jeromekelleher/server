@@ -14,6 +14,7 @@ import flask
 import flask.ext.cors as cors
 import humanize
 import werkzeug
+import google.protobuf.json_format as json_format
 
 import ga4gh
 import ga4gh.backend as backend
@@ -291,7 +292,8 @@ def handleException(exception):
     if not isinstance(exception, exceptions.BaseServerException):
         serverException = exceptions.getServerError(exception)
     error = serverException.toProtocolElement()
-    responseStr = error.SerializeToString()
+    # responseStr = error.SerializeToString()
+    responseStr = json_format.MessageToJson(error)
     return getFlaskResponse(responseStr, serverException.httpStatus)
 
 

@@ -147,7 +147,9 @@ class AbstractVariantSet(datamodel.DatamodelObject):
         protocolElement.dataset_id = "NotImplemented"
         # TODO fixme -- proto issues.
         # protocolElement.reference_set_id = self._reference_set_id
-        # protocolElement.metadata = self.getMetadata()
+        for metadata in self.getMetadata():
+            newValue = protocolElement.metadata.add()
+            newValue.CopyFrom(metadata)
         return protocolElement
 
     def getId(self):
@@ -396,7 +398,8 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
             if value is not None:
                 # This creates a new value
                 v = variant.info[key]
-                if v is None:  # Just to keep the flake8 happy.
+                # Keep flake8 happy.
+                if v is None:
                     print(v)
                 # TODO how do we add values into this list??
                 # for u in _encodeValue(value):
@@ -474,7 +477,7 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
             metadata.id = id
             # FIXME proto issues here.
             # metadata.type = type
-            # metadata.number = number
+            metadata.number = number
             metadata.description = description
             return metadata
 
