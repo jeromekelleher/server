@@ -325,20 +325,6 @@ class Backend(object):
                 nextPageToken = str(currentIndex)
             yield object_.toProtocolElement(), nextPageToken
 
-    def searchVariantSets(self, request, acceptEncoding):
-        """
-        Returns a GASearchVariantSetsResponse for the specified
-        GASearchVariantSetsRequest object.
-        """
-        return self.runSearchRequest(
-            request, acceptEncoding, protocol.SearchVariantSetsRequest,
-            protocol.VariantSet, self.variantSetsGenerator)
-
-    def searchVariants(self, request, acceptEncoding):
-        return self.runSearchRequest(
-            request, acceptEncoding, protocol.SearchVariantsRequest,
-            protocol.Variant, self.variantsGenerator)
-
     def _objectListGenerator(self, request, objectList):
         """
         Returns a generator over the objects in the specified list using
@@ -352,14 +338,6 @@ class Backend(object):
             request, protocol.SearchCallSetsRequest,
             protocol.CallSet, self.callSetsGenerator)
 
-    def searchDatasets(self, request, acceptEncoding):
-        """
-        Returns a generator suitable for a search method in which the
-        result set is a single object.
-        """
-        return self.runSearchRequest(
-            request, acceptEncoding, protocol.SearchDatasetsRequest,
-            protocol.Dataset, self.datasetsGenerator)
 
     # Iterators over the data hieararchy
     def _noObjectGenerator(self):
@@ -640,14 +618,13 @@ class Backend(object):
             protocol.SearchReadsResponse,
             self.readsGenerator)
 
-    def runSearchReferenceSets(self, request):
+    def runSearchReferenceSets(self, request, acceptEncoding):
         """
         Runs the specified SearchReferenceSetsRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchReferenceSetsRequest,
-            protocol.SearchReferenceSetsResponse,
-            self.referenceSetsGenerator)
+            request, acceptEncoding, protocol.SearchReferenceSetsRequest,
+            protocol.ReferenceSet, self.referenceSetsGenerator)
 
     def runSearchReferences(self, request):
         """
@@ -658,23 +635,21 @@ class Backend(object):
             protocol.SearchReferencesResponse,
             self.referencesGenerator)
 
-    def runSearchVariantSets(self, request):
+    def runSearchVariantSets(self, request, acceptEncoding):
         """
         Runs the specified SearchVariantSetsRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchVariantSetsRequest,
-            protocol.SearchVariantSetsResponse,
-            self.variantSetsGenerator)
+            request, acceptEncoding, protocol.SearchVariantSetsRequest,
+            protocol.VariantSet, self.variantSetsGenerator)
 
-    def runSearchVariants(self, request):
+    def runSearchVariants(self, request, acceptEncoding):
         """
         Runs the specified SearchVariantRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchVariantsRequest,
-            protocol.SearchVariantsResponse,
-            self.variantsGenerator)
+            request, acceptEncoding, protocol.SearchVariantsRequest,
+            protocol.Variant, self.variantsGenerator)
 
     def runSearchCallSets(self, request):
         """
@@ -685,11 +660,10 @@ class Backend(object):
             protocol.SearchCallSetsResponse,
             self.callSetsGenerator)
 
-    def runSearchDatasets(self, request):
+    def runSearchDatasets(self, request, acceptEncoding):
         """
         Runs the specified SearchDatasetsRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchDatasetsRequest,
-            protocol.SearchDatasetsResponse,
-            self.datasetsGenerator)
+            request, acceptEncoding, protocol.SearchDatasetsRequest,
+            protocol.Dataset, self.datasetsGenerator)

@@ -48,41 +48,51 @@ class Ga4ghProtocol(object):
         repoDir = "ga4gh-example-data"
         repo = datarepo.FileSystemDataRepository(repoDir)
         self._backend = backend.Backend(repo)
+        self.datasets = Dataset(self._backend)
+        self.referencesets = ReferenceSet(self._backend)
         self.variantsets = VariantSet(self._backend)
         self.variants = Variant(self._backend)
-        self.datasets = Dataset(self._backend)
 
     @cherrypy.expose()
     def index(self):
         return "GA4GH API"
 
-class Dataset(object):
+class ServerObject(object):
 
     def __init__(self, backend):
         self._backend = backend
 
-    @cherrypy.expose()
-    @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
-    def search(self):
-        return handlePostRequest(self._backend.searchDatasets)
-
-
-class VariantSet(object):
-
-    def __init__(self, backend):
-        self._backend = backend
+class Dataset(ServerObject):
 
     @cherrypy.expose()
     @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
     def search(self):
-        return handlePostRequest(self._backend.searchVariantSets)
+        return handlePostRequest(self._backend.runSearchDatasets)
 
-class Variant(object):
+# TODO add in support for other objects by
+# 1) adding in a new class here;
+# 2) updating backend function to use new pattern.
 
-    def __init__(self, backend):
-        self._backend = backend
+class ReferenceSet(ServerObject):
 
     @cherrypy.expose()
     @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
     def search(self):
-        return handlePostRequest(self._backend.searchVariants)
+        return handlePostRequest(self._backend.runSearchReferenceSets)
+
+class VariantSet(ServerObject):
+
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
+    def search(self):
+        return handlePostRequest(self._backend.runSearchVariantSets)
+
+class Variant(ServerObject):
+
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
+    def search(self):
+        return handlePostRequest(self._backend.runSearchVariants)
+
+
+
