@@ -7,6 +7,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import json
+import struct
 
 import ga4gh.datamodel as datamodel
 import ga4gh.exceptions as exceptions
@@ -237,6 +238,31 @@ class Backend(object):
         """
         self._maxResponseLength = maxResponseLength
 
+    def toWireFormat(self, typeCode, message):
+        """
+        Returns a bytes object containing the wire format representation
+        of the specified message.
+        """
+        return struct.pack("!cI", typeCode, len(message)) + message
+
+    def runSearchRequest(
+            self, requestStr, acceptEncoding, requestClass, responseClass,
+            objectGenerator):
+        self.startProfile()
+        try:
+            requestDict = json.loads(requestStr)
+        except ValueError:
+            raise exceptions.InvalidJsonException(requestStr)
+        self.validateRequest(requestDict, requestClass)
+        request = requestClass.fromJsonDict(requestDict)
+        typeObject = '{{"class":"{}"}}'.format(responseClass.__name__)
+        yield self.toWireFormat(b"T", typeObject.encode())
+        for obj, nextPageToken in objectGenerator(request):
+            jsonString = obj.toJsonString()
+            self.validateResponse(jsonString, responseClass)
+            yield self.toWireFormat(b"D", jsonString.encode())
+        self.endProfile()
+
     def startProfile(self):
         """
         Profiling hook. Called at the start of the runSearchRequest method
@@ -299,6 +325,20 @@ class Backend(object):
                 nextPageToken = str(currentIndex)
             yield object_.toProtocolElement(), nextPageToken
 
+    def searchVariantSets(self, request, acceptEncoding):
+        """
+        Returns a GASearchVariantSetsResponse for the specified
+        GASearchVariantSetsRequest object.
+        """
+        return self.runSearchRequest(
+            request, acceptEncoding, protocol.SearchVariantSetsRequest,
+            protocol.VariantSet, self.variantSetsGenerator)
+
+    def searchVariants(self, request, acceptEncoding):
+        return self.runSearchRequest(
+            request, acceptEncoding, protocol.SearchVariantsRequest,
+            protocol.Variant, self.variantsGenerator)
+
     def _objectListGenerator(self, request, objectList):
         """
         Returns a generator over the objects in the specified list using
@@ -308,12 +348,20 @@ class Backend(object):
             request, len(objectList), lambda index: objectList[index])
 
     def _singleObjectGenerator(self, datamodelObject):
+        return self.runSearchRequest(
+            request, protocol.SearchCallSetsRequest,
+            protocol.CallSet, self.callSetsGenerator)
+
+    def searchDatasets(self, request, acceptEncoding):
         """
         Returns a generator suitable for a search method in which the
         result set is a single object.
         """
-        yield (datamodelObject.toProtocolElement(), None)
+        return self.runSearchRequest(
+            request, acceptEncoding, protocol.SearchDatasetsRequest,
+            protocol.Dataset, self.datasetsGenerator)
 
+    # Iterators over the data hieararchy
     def _noObjectGenerator(self):
         """
         Returns a generator yielding no results
@@ -464,41 +512,6 @@ class Backend(object):
         protocolElement = obj.toProtocolElement()
         jsonString = protocolElement.toJsonString()
         return jsonString
-
-    def runSearchRequest(
-            self, requestStr, requestClass, responseClass, objectGenerator):
-        """
-        Runs the specified request. The request is a string containing
-        a JSON representation of an instance of the specified requestClass.
-        We return a string representation of an instance of the specified
-        responseClass in JSON format. Objects are filled into the page list
-        using the specified object generator, which must return
-        (object, nextPageToken) pairs, and be able to resume iteration from
-        any point using the nextPageToken attribute of the request object.
-        """
-        self.startProfile()
-        try:
-            requestDict = json.loads(requestStr)
-        except ValueError:
-            raise exceptions.InvalidJsonException(requestStr)
-        self.validateRequest(requestDict, requestClass)
-        request = requestClass.fromJsonDict(requestDict)
-        if request.pageSize is None:
-            request.pageSize = self._defaultPageSize
-        if request.pageSize <= 0:
-            raise exceptions.BadPageSizeException(request.pageSize)
-        responseBuilder = protocol.SearchResponseBuilder(
-            responseClass, request.pageSize, self._maxResponseLength)
-        nextPageToken = None
-        for obj, nextPageToken in objectGenerator(request):
-            responseBuilder.addValue(obj)
-            if responseBuilder.isFull():
-                break
-        responseBuilder.setNextPageToken(nextPageToken)
-        responseString = responseBuilder.getJsonString()
-        self.validateResponse(responseString, responseClass)
-        self.endProfile()
-        return responseString
 
     def runListReferenceBases(self, id_, requestArgs):
         """

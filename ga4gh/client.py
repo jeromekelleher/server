@@ -7,7 +7,9 @@ from __future__ import unicode_literals
 
 import requests
 import posixpath
+import struct
 import logging
+import json
 
 import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
@@ -25,49 +27,116 @@ class AbstractClient(object):
         logging.basicConfig()
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(logLevel)
+        self._debugLevel = 0
 
-    def _deserializeResponse(self, jsonResponseString, protocolResponseClass):
-        self._protocolBytesReceived += len(jsonResponseString)
-        self._logger.debug("response:{}".format(jsonResponseString))
-        if jsonResponseString == '':
-            raise exceptions.EmptyResponseException()
-        responseObject = protocolResponseClass.fromJsonString(
-            jsonResponseString)
-        return responseObject
+        requestsLog = logging.getLogger("requests.packages.urllib3")
+        requestsLog.setLevel(logLevel)
+        if self._debugLevel == 0:
+            # suppress warning about using https without cert verification
+            requests.packages.urllib3.disable_warnings()
+        requestsLog.propagate = True
 
-    def _runSearchPageRequest(
-            self, protocolRequest, objectName, protocolResponseClass):
+    def getBytesRead(self):
         """
-        Runs a complete transaction with the server to obtain a single
-        page of search results.
+        Returns the total number of (non HTTP) bytes read from the server
+        by this client.
         """
-        raise NotImplemented()
+        return self._bytesRead
 
-    def _runSearchRequest(
-            self, protocolRequest, objectName, protocolResponseClass):
-        """
-        Runs the specified request at the specified objectName and instantiates
-        an object of the specified class. We yield each object in listAttr.
-        If pages of results are present, repeat this process until the
-        pageToken is null.
-        """
-        notDone = True
-        while notDone:
-            responseObject = self._runSearchPageRequest(
-                protocolRequest, objectName, protocolResponseClass)
-            valueList = getattr(
-                responseObject, protocolResponseClass.getValueListName())
-            for extract in valueList:
-                yield extract
-            notDone = responseObject.nextPageToken is not None
+    # TODO temporary auth solution
+    def _getAuth(self):
+        return {}
+
+    # Ordinarily logger's implementation will take care of if log messages
+    # should be emitted based on the log level.  The _shouldLog* methods
+    # are only used if there are additional performance hits involved in
+    # creating the log message that we want to avoid otherwise.
+    def _shouldLogDebug(self):
+        return self._debugLevel > 1
+
+    def _shouldLogInfo(self):
+        return self._debugLevel > 0
+
+    def _debugResponse(self, jsonString):
+        if self._shouldLogDebug():
+            self._logger.debug("json response:")
+            prettyString = self._prettyJsonString(jsonString)
+            self._logger.debug(prettyString)
+
+    def _debugRequest(self, jsonString):
+        if self._shouldLogDebug():
+            self._logger.debug("json request:")
+            prettyString = self._prettyJsonString(jsonString)
+            self._logger.debug(prettyString)
+
+    def _prettyJsonString(self, jsonString):
+        # note: expensive method
+        return json.dumps(json.loads(jsonString), sort_keys=True, indent=4)
+
+    def _checkStatus(self, response):
+        if response.status_code != requests.codes.ok:
+            self._logger.error("%s %s", response.status_code, response.text)
+            # TODO use custom exception instead of Exception
+            raise Exception("Url {0} had status_code {1}".format(
+                response.url, response.status_code))
+
+    def _updateBytesRead(self, jsonString):
+        self._bytesRead += len(jsonString)
+
+    def _updateNotDone(self, responseObject, protocolRequest):
+        if hasattr(responseObject, 'nextPageToken'):
             protocolRequest.pageToken = responseObject.nextPageToken
+            notDone = responseObject.nextPageToken is not None
+        else:
+            notDone = False
+        return notDone
 
-    def _runListReferenceBasesPageRequest(self, id_, protocolRequest):
+    def _decodeStream(self, response):
         """
-        Runs a complete transaction with the server to get a single
-        page of results for the specified ListReferenceBasesRequest.
+        Returns a list of type code message pairs from the stream.
         """
-        raise NotImplemented()
+        buff = response.raw.read(5)
+        while len(buff) > 0:
+            # The first 5 bytes are the message type and length
+            messageType, length = struct.unpack("!cI", buff)
+            message = response.raw.read(length)
+            yield messageType, message
+            buff = response.raw.read(5)
+
+    def _doRequest(self, httpMethod, url, protocolResponseClass,
+                   httpParams={}, httpData=None):
+        """
+        Performs a request to the server and returns the response
+        """
+        headers = {"Accept-Encoding": "ga4gh+json"}
+        params = self._getAuth()
+        params.update(httpParams)
+        self._logger.info("{0} {1}".format(httpMethod, url))
+        if httpData is not None:
+            headers.update({"Content-type": "application/json"})
+            self._debugRequest(httpData)
+        response = requests.request(
+            httpMethod, url, params=params, data=httpData, headers=headers,
+            stream=True)
+        print("Response header:")
+        for k, v in response.headers.items():
+            print("\t", k, "->", v)
+        self._checkStatus(response)
+        responseClass = None
+        for typeCode, message in self._decodeStream(response):
+            if typeCode == "T":
+                d = json.loads(message)
+                responseClass = getattr(protocol, d["class"])
+            elif typeCode == "D":
+                yield responseClass.fromJsonString(message)
+
+
+    def _runSearchRequest(self, protocolRequest, objectName,
+                         protocolResponseClass):
+        fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
+        data = protocolRequest.toJsonString()
+        return self._doRequest(
+            'POST', fullUrl, protocolResponseClass, httpData=data)
 
     def listReferenceBases(self, id_, start=0, end=None):
         """
