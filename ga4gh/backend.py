@@ -441,8 +441,10 @@ class Backend(object):
         # Find the reference.
         referenceSet = readGroupSet.getReferenceSet()
         reference = referenceSet.getReference(request.referenceId)
-        intervalIterator = ReadsIntervalIterator(request, readGroup, reference)
-        return intervalIterator
+        iterator = readGroup.getReadAlignments(
+            reference, request.start, request.end)
+        for readAlignment in iterator:
+            yield readAlignment, None
 
     def variantsGenerator(self, request):
         """

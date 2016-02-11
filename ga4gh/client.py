@@ -488,9 +488,9 @@ class HttpClient(AbstractClient):
         response = requests.request(
             httpMethod, url, params=params, data=httpData, headers=headers,
             stream=True)
-        print("Response header:")
-        for k, v in response.headers.items():
-            print("\t", k, "->", v)
+        # print("Response header:")
+        # for k, v in response.headers.items():
+        #     print("\t", k, "->", v)
         self._checkStatus(response)
         responseClass = None
         for typeCode, message in self._decodeStream(response):

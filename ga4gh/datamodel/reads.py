@@ -209,9 +209,12 @@ class HtslibReadGroupSet(datamodel.PysamDatamodelMixin, AbstractReadGroupSet):
         else:
             self._defaultReadGroup = False
             for readGroupHeader in samFile.header['RG']:
-                readGroup = HtslibReadGroup(
+                readGroup = self._getReadGroupClass()(
                     self, readGroupHeader['ID'], readGroupHeader)
                 self.addReadGroup(readGroup)
+
+    def _getReadGroupClass(self):
+        return HtslibReadGroup
 
     def checkConsistency(self, dataRepository):
         # Find the reference set name (if there is one) by looking at
@@ -267,12 +270,24 @@ class HtslibReadGroupSet(datamodel.PysamDatamodelMixin, AbstractReadGroupSet):
         return self._defaultReadGroup
 
     def getNumAlignedReads(self):
+        ret = 0
         samFile = self.getFileHandle(self._samFilePath)
-        return samFile.mapped
+        try:
+            # TODO This fails for CRAM; is there a better way to do this?
+            ret = samFile.mapped
+        except ValueError:
+            pass
+        return ret
 
     def getNumUnalignedReads(self):
+        ret = 0
         samFile = self.getFileHandle(self._samFilePath)
-        return samFile.unmapped
+        try:
+            # TODO This fails for CRAM; is there a better way to do this?
+            ret = samFile.unmapped
+        except ValueError:
+            pass
+        return ret
 
     def getPrograms(self):
         return self._programs
@@ -686,3 +701,16 @@ class HtslibReadGroup(datamodel.PysamDatamodelMixin, AbstractReadGroup):
 
     def getRunTime(self):
         return self._runTime
+
+
+class HackedCramReadGroupSet(HtslibReadGroupSet):
+
+    def _getReadGroupClass(self):
+        return HackedCramReadGroup
+
+
+class HackedCramReadGroup(HtslibReadGroup):
+
+    def getReadAlignments(self, reference, start=None, end=None):
+        print("Getting readAlignments for ", reference, start ,end)
+        return []

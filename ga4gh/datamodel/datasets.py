@@ -182,6 +182,13 @@ class FileSystemDataset(AbstractDataset):
                 readGroupSet = reads.HtslibReadGroupSet(
                     self, localId, bamPath, dataRepository)
                 self.addReadGroupSet(readGroupSet)
+            if fnmatch.fnmatch(filename, '*.cram'):
+                localId, _ = os.path.splitext(filename)
+                cramPath = os.path.join(readGroupSetDir, filename)
+                readGroupSet = reads.HackedCramReadGroupSet(
+                    self, localId, cramPath, dataRepository)
+                self.addReadGroupSet(readGroupSet)
+
 
     def _setMetadata(self):
         metadataFileName = '{}.json'.format(self._dataDir)
