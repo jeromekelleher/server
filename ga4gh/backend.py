@@ -148,34 +148,6 @@ class IntervalIterator(object):
         return self
 
 
-class ReadsIntervalIterator(IntervalIterator):
-    """
-    An interval iterator for reads
-    """
-    def __init__(self, request, parentContainer, reference):
-        self._reference = reference
-        super(ReadsIntervalIterator, self).__init__(request, parentContainer)
-
-    def _search(self, start, end):
-        return self._parentContainer.getReadAlignments(
-            self._reference, start, end)
-
-    @classmethod
-    def _getStart(cls, readAlignment):
-        if readAlignment.alignment is None:
-            # unmapped read with mapped mate; see SAM standard 2.4.1
-            return readAlignment.nextMatePosition.position
-        else:
-            # usual case
-            return readAlignment.alignment.position.position
-
-    @classmethod
-    def _getEnd(cls, readAlignment):
-        return (
-            cls._getStart(readAlignment) +
-            len(readAlignment.alignedSequence))
-
-
 class VariantsIntervalIterator(IntervalIterator):
     """
     An interval iterator for variants
@@ -255,12 +227,19 @@ class Backend(object):
             raise exceptions.InvalidJsonException(requestStr)
         self.validateRequest(requestDict, requestClass)
         request = requestClass.fromJsonDict(requestDict)
-        typeObject = '{{"class":"{}"}}'.format(responseClass.__name__)
-        yield self.toWireFormat(b"T", typeObject.encode())
-        for obj, nextPageToken in objectGenerator(request):
-            jsonString = obj.toJsonString()
-            self.validateResponse(jsonString, responseClass)
-            yield self.toWireFormat(b"D", jsonString.encode())
+        if acceptEncoding == "ga4gh+json":
+            typeObject = '{{"class":"{}"}}'.format(responseClass.__name__)
+            yield self.toWireFormat(b"T", typeObject.encode())
+            for obj, _ in objectGenerator(request):
+                jsonString = obj.toJsonString()
+                self.validateResponse(jsonString, responseClass)
+                yield self.toWireFormat(b"D", jsonString.encode())
+        elif acceptEncoding == "cram":
+            # We can put in a 'resume' here every n blocks if needed.
+            for block in objectGenerator(request, True):
+                yield self.toWireFormat(b"B", block)
+        else:
+            raise ValueError("Unknown encoding '{}'".format(acceptEncoding))
         self.endProfile()
 
     def startProfile(self):
@@ -423,7 +402,7 @@ class Backend(object):
             request, dataset.getNumVariantSets(),
             dataset.getVariantSetByIndex)
 
-    def readsGenerator(self, request):
+    def readsGenerator(self, request, cram=False):
         """
         Returns a generator over the (read, nextPageToken) pairs defined
         by the specified request
@@ -441,10 +420,16 @@ class Backend(object):
         # Find the reference.
         referenceSet = readGroupSet.getReferenceSet()
         reference = referenceSet.getReference(request.referenceId)
-        iterator = readGroup.getReadAlignments(
-            reference, request.start, request.end)
-        for readAlignment in iterator:
-            yield readAlignment, None
+        if not cram:
+            iterator = readGroup.getReadAlignments(
+                reference, request.start, request.end)
+            for readAlignment in iterator:
+                yield readAlignment, None
+        else:
+            iterator = readGroup.getCramBlocks(
+                reference, request.start, request.end)
+            for block in iterator:
+                yield block
 
     def variantsGenerator(self, request):
         """

@@ -257,8 +257,7 @@ class AbstractClient(object):
         request.variantSetId = variantSetId
         request.callSetIds = callSetIds
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "variants", protocol.SearchVariantsResponse)
+        return self._runSearchRequest(request, "variants")
 
     def searchDatasets(self):
         """
@@ -269,8 +268,7 @@ class AbstractClient(object):
         """
         request = protocol.SearchDatasetsRequest()
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "datasets", protocol.SearchDatasetsResponse)
+        return self._runSearchRequest(request, "datasets")
 
     def searchVariantSets(self, datasetId):
         """
@@ -285,8 +283,7 @@ class AbstractClient(object):
         request = protocol.SearchVariantSetsRequest()
         request.datasetId = datasetId
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "variantsets", protocol.SearchVariantSetsResponse)
+        return self._runSearchRequest(request, "variantsets")
 
     def searchReferenceSets(
             self, accession=None, md5checksum=None, assemblyId=None):
@@ -310,8 +307,7 @@ class AbstractClient(object):
         request.md5checksum = md5checksum
         request.assemblyId = assemblyId
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "referencesets", protocol.SearchReferenceSetsResponse)
+        return self._runSearchRequest(request, "referencesets")
 
     def searchReferences(
             self, referenceSetId, accession=None, md5checksum=None):
@@ -333,8 +329,7 @@ class AbstractClient(object):
         request.accession = accession
         request.md5checksum = md5checksum
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "references", protocol.SearchReferencesResponse)
+        return self._runSearchRequest(request, "references")
 
     def searchCallSets(self, variantSetId, name=None):
         """
@@ -350,8 +345,7 @@ class AbstractClient(object):
         request.variantSetId = variantSetId
         request.name = name
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "callsets", protocol.SearchCallSetsResponse)
+        return self._runSearchRequest(request, "callsets")
 
     def searchReadGroupSets(self, datasetId, name=None):
         """
@@ -368,11 +362,11 @@ class AbstractClient(object):
         request.datasetId = datasetId
         request.name = name
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "readgroupsets", protocol.SearchReadGroupSetsResponse)
+        return self._runSearchRequest(request, "readgroupsets")
 
     def searchReads(
-            self, readGroupIds, referenceId=None, start=None, end=None):
+            self, readGroupIds, referenceId=None, start=None, end=None,
+            cramOutput=False):
         """
         Returns an iterator over the Reads fulfilling the specified
         conditions from the specified ReadGroupIds.
@@ -401,8 +395,10 @@ class AbstractClient(object):
         request.start = start
         request.end = end
         request.pageSize = self._pageSize
-        return self._runSearchRequest(
-            request, "reads", protocol.SearchReadsResponse)
+        if cramOutput:
+            return self._runBlobSearchRequest(request, "reads", "ga4gh+cram")
+        else:
+            return self._runSearchRequest(request, "reads")
 
 
 class HttpClient(AbstractClient):
@@ -473,25 +469,32 @@ class HttpClient(AbstractClient):
             yield messageType, message
             buff = response.raw.read(5)
 
-    def _doRequest(self, httpMethod, url, protocolResponseClass,
-                   httpParams={}, httpData=None):
+    def _makeRequest(self, url, acceptEncoding, httpParams={}, httpData=None):
         """
         Performs a request to the server and returns the response
         """
-        headers = {"Accept-Encoding": "ga4gh+json"}
+        headers = {"Accept-Encoding": acceptEncoding}
         params = self._getAuth()
         params.update(httpParams)
-        self._logger.info("{0} {1}".format(httpMethod, url))
+        self._logger.info("{0} {1}".format('POST', url))
+        print("Request-header:", headers)
+        print("Request = ", httpData)
         if httpData is not None:
             headers.update({"Content-type": "application/json"})
             self._debugRequest(httpData)
         response = requests.request(
-            httpMethod, url, params=params, data=httpData, headers=headers,
+            'POST', url, params=params, data=httpData, headers=headers,
             stream=True)
-        # print("Response header:")
-        # for k, v in response.headers.items():
-        #     print("\t", k, "->", v)
+        print("Response header:")
+        for k, v in response.headers.items():
+            print("\t", k, "->", v)
         self._checkStatus(response)
+        return response
+
+    def _runSearchRequest(self, protocolRequest, objectName):
+        fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
+        data = protocolRequest.toJsonString()
+        response = self._makeRequest(fullUrl, "ga4gh+json", httpData=data)
         responseClass = None
         for typeCode, message in self._decodeStream(response):
             if typeCode == "T":
@@ -500,13 +503,16 @@ class HttpClient(AbstractClient):
             elif typeCode == "D":
                 yield responseClass.fromJsonString(message)
 
-    def _runSearchRequest(
-            self, protocolRequest, objectName, protocolResponseClass):
+    def _runBlobSearchRequest(
+            self, protocolRequest, objectName, acceptEncoding):
         fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
         data = protocolRequest.toJsonString()
-        return self._doRequest(
-            'POST', fullUrl, protocolResponseClass, httpData=data)
-
+        response = self._makeRequest(fullUrl, "cram", httpData=data)
+        for typeCode, message in self._decodeStream(response):
+            if typeCode == "B":
+                yield message
+            else:
+                raise ValueError("Unexpected typecode in stream")
 
     def _deserializeResponse(self, responseJson, protocolResponseClass):
         return protocolResponseClass.fromJsonString(responseJson)

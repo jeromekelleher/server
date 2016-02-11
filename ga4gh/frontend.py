@@ -40,6 +40,7 @@ def handlePostRequest(handler):
     cl = cherrypy.request.headers['Content-Length']
     body = cherrypy.request.body.read(int(cl))
     acceptEncoding = cherrypy.request.headers['Accept-Encoding']
+    cherrypy.response.headers['Content-Type']= acceptEncoding
     return handler(body, acceptEncoding)
 
 def handleGetRequest(handler, id_, key):

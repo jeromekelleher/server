@@ -711,6 +711,12 @@ class HackedCramReadGroupSet(HtslibReadGroupSet):
 
 class HackedCramReadGroup(HtslibReadGroup):
 
+
     def getReadAlignments(self, reference, start=None, end=None):
-        print("Getting readAlignments for ", reference, start ,end)
+        raise ValueError("JSON not supported on CRAM --- FIXME!!")
+
+    def getCramBlocks(self, reference, start=None, end=None):
+        # HACK!!!
+        tid = int(reference.getLocalId()) - 1
+        print("Getting readAlignments for ", reference.getLocalId(), start, end)
         return []

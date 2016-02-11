@@ -12,6 +12,7 @@ import logging
 import unittest
 import unittest.loader
 import unittest.suite
+import sys
 
 import requests
 
@@ -150,6 +151,11 @@ class FormattedOutputRunner(AbstractQueryRunner):
         """
         for gaObject in gaObjects:
             print(gaObject.id, gaObject.name, sep="\t")
+
+    def _binaryOutput(self, blocks):
+        for block in blocks:
+            print(block)
+            sys.stdout.write(block)
 
 
 class AbstractGetRunner(FormattedOutputRunner):
@@ -402,6 +408,7 @@ class SearchReadsRunner(AbstractSearchRunner):
         self._end = args.end
         self._referenceId = args.referenceId
         self._readGroupIds = None
+        self._cramOutput = args.outputFormat == "cram"
         if args.readGroupIds is not None:
             self._readGroupIds = args.readGroupIds.split(",")
 
@@ -420,8 +427,17 @@ class SearchReadsRunner(AbstractSearchRunner):
         else:
             iterator = self._client.searchReads(
                 readGroupIds=[referenceGroupId], referenceId=referenceId,
-                start=self._start, end=self._end)
-            self._output(iterator)
+                start=self._start, end=self._end, cramOutput=self._cramOutput)
+            if self._cramOutput:
+                self._writeBinaryFile(iterator)
+            else:
+                self._output(iterator)
+
+
+    def _writeBinaryFile(self, blocks):
+        print("Writing blocks")
+        for b in blocks:
+            print(len(b))
 
     def run(self):
         """
@@ -616,8 +632,8 @@ def addUrlArgument(parser):
 
 def addOutputFormatArgument(parser):
     parser.add_argument(
-        "--outputFormat", "-O", choices=['text', 'json'], default="text",
-        help=(
+        "--outputFormat", "-O", choices=['text', 'json', 'cram'],
+        default="text", help=(
             "The format for object output. Currently supported are "
             "'text' (default), which gives a short summary of the object and "
             "'json', which outputs each object in line-delimited JSON"))
