@@ -24,9 +24,8 @@ import ga4gh.exceptions as exceptions
 import ga4gh.datarepo as datarepo
 
 
-MIMETYPE = "application/json"
 SEARCH_ENDPOINT_METHODS = ['POST', 'OPTIONS']
-SECRET_KEY_LENGTH = 24
+GET_ENDPOINT_METHODS = ['GET']
 
 def http_methods_allowed(methods=['GET', 'HEAD']):
     method = cherrypy.request.method.upper()
@@ -36,11 +35,17 @@ def http_methods_allowed(methods=['GET', 'HEAD']):
 
 cherrypy.tools.allow = cherrypy.Tool('on_start_resource', http_methods_allowed)
 
+
 def handlePostRequest(handler):
     cl = cherrypy.request.headers['Content-Length']
     body = cherrypy.request.body.read(int(cl))
     acceptEncoding = cherrypy.request.headers['Accept-Encoding']
     return handler(body, acceptEncoding)
+
+def handleGetRequest(handler, id_, key):
+    # TODO handle niceties of HTTP stuff here.
+    return handler(id_)
+
 
 class Ga4ghProtocol(object):
 
@@ -50,8 +55,12 @@ class Ga4ghProtocol(object):
         self._backend = backend.Backend(repo)
         self.datasets = Dataset(self._backend)
         self.referencesets = ReferenceSet(self._backend)
+        self.references = Reference(self._backend)
         self.variantsets = VariantSet(self._backend)
         self.variants = Variant(self._backend)
+        self.readgroupsets = ReadGroupSet(self._backend)
+        self.readgroups = ReadGroup(self._backend)
+        self.reads = Read(self._backend)
 
     @cherrypy.expose()
     def index(self):
@@ -69,6 +78,12 @@ class Dataset(ServerObject):
     def search(self):
         return handlePostRequest(self._backend.runSearchDatasets)
 
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=GET_ENDPOINT_METHODS)
+    def default(self, id_, key=None):
+        return handleGetRequest(self._backend.runGetDataset, id_, key)
+
+
 # TODO add in support for other objects by
 # 1) adding in a new class here;
 # 2) updating backend function to use new pattern.
@@ -79,6 +94,14 @@ class ReferenceSet(ServerObject):
     @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
     def search(self):
         return handlePostRequest(self._backend.runSearchReferenceSets)
+
+class Reference(ServerObject):
+
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
+    def search(self):
+        return handlePostRequest(self._backend.runSearchReferences)
+
 
 class VariantSet(ServerObject):
 
@@ -93,6 +116,33 @@ class Variant(ServerObject):
     @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
     def search(self):
         return handlePostRequest(self._backend.runSearchVariants)
+
+class ReadGroupSet(ServerObject):
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
+    def search(self):
+        return handlePostRequest(self._backend.runSearchReadGroupSets)
+
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=GET_ENDPOINT_METHODS)
+    def default(self, id_, key=None):
+        return handleGetRequest(self._backend.runGetReadGroupSet, id_, key)
+
+class ReadGroup(ServerObject):
+
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=GET_ENDPOINT_METHODS)
+    def default(self, id_, key=None):
+        return handleGetRequest(self._backend.runGetReadGroup, id_, key)
+
+
+
+class Read(ServerObject):
+
+    @cherrypy.expose()
+    @cherrypy.tools.allow(methods=SEARCH_ENDPOINT_METHODS)
+    def search(self):
+        return handlePostRequest(self._backend.runSearchReads)
 
 
 

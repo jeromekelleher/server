@@ -600,23 +600,21 @@ class Backend(object):
 
     # Search requests.
 
-    def runSearchReadGroupSets(self, request):
+    def runSearchReadGroupSets(self, request, acceptEncoding):
         """
         Runs the specified SearchReadGroupSetsRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchReadGroupSetsRequest,
-            protocol.SearchReadGroupSetsResponse,
-            self.readGroupSetsGenerator)
+            request, acceptEncoding, protocol.SearchReadGroupSetsRequest,
+            protocol.ReadGroupSet, self.readGroupSetsGenerator)
 
-    def runSearchReads(self, request):
+    def runSearchReads(self, request, acceptEncoding):
         """
         Runs the specified SearchReadsRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchReadsRequest,
-            protocol.SearchReadsResponse,
-            self.readsGenerator)
+            request, acceptEncoding, protocol.SearchReadsRequest,
+            protocol.ReadAlignment, self.readsGenerator)
 
     def runSearchReferenceSets(self, request, acceptEncoding):
         """
@@ -626,14 +624,13 @@ class Backend(object):
             request, acceptEncoding, protocol.SearchReferenceSetsRequest,
             protocol.ReferenceSet, self.referenceSetsGenerator)
 
-    def runSearchReferences(self, request):
+    def runSearchReferences(self, request, acceptEncoding):
         """
         Runs the specified SearchReferenceRequest.
         """
         return self.runSearchRequest(
-            request, protocol.SearchReferencesRequest,
-            protocol.SearchReferencesResponse,
-            self.referencesGenerator)
+            request, acceptEncoding, protocol.SearchReferencesRequest,
+            protocol.Reference, self.referencesGenerator)
 
     def runSearchVariantSets(self, request, acceptEncoding):
         """

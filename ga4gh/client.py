@@ -83,60 +83,6 @@ class AbstractClient(object):
     def _updateBytesRead(self, jsonString):
         self._bytesRead += len(jsonString)
 
-    def _updateNotDone(self, responseObject, protocolRequest):
-        if hasattr(responseObject, 'nextPageToken'):
-            protocolRequest.pageToken = responseObject.nextPageToken
-            notDone = responseObject.nextPageToken is not None
-        else:
-            notDone = False
-        return notDone
-
-    def _decodeStream(self, response):
-        """
-        Returns a list of type code message pairs from the stream.
-        """
-        buff = response.raw.read(5)
-        while len(buff) > 0:
-            # The first 5 bytes are the message type and length
-            messageType, length = struct.unpack("!cI", buff)
-            message = response.raw.read(length)
-            yield messageType, message
-            buff = response.raw.read(5)
-
-    def _doRequest(self, httpMethod, url, protocolResponseClass,
-                   httpParams={}, httpData=None):
-        """
-        Performs a request to the server and returns the response
-        """
-        headers = {"Accept-Encoding": "ga4gh+json"}
-        params = self._getAuth()
-        params.update(httpParams)
-        self._logger.info("{0} {1}".format(httpMethod, url))
-        if httpData is not None:
-            headers.update({"Content-type": "application/json"})
-            self._debugRequest(httpData)
-        response = requests.request(
-            httpMethod, url, params=params, data=httpData, headers=headers,
-            stream=True)
-        print("Response header:")
-        for k, v in response.headers.items():
-            print("\t", k, "->", v)
-        self._checkStatus(response)
-        responseClass = None
-        for typeCode, message in self._decodeStream(response):
-            if typeCode == "T":
-                d = json.loads(message)
-                responseClass = getattr(protocol, d["class"])
-            elif typeCode == "D":
-                yield responseClass.fromJsonString(message)
-
-
-    def _runSearchRequest(self, protocolRequest, objectName,
-                         protocolResponseClass):
-        fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
-        data = protocolRequest.toJsonString()
-        return self._doRequest(
-            'POST', fullUrl, protocolResponseClass, httpData=data)
 
     def listReferenceBases(self, id_, start=0, end=None):
         """
@@ -513,15 +459,57 @@ class HttpClient(AbstractClient):
         """
         return {'key': self._authenticationKey}
 
-    def _runSearchPageRequest(
+
+
+    def _decodeStream(self, response):
+        """
+        Returns a list of type code message pairs from the stream.
+        """
+        buff = response.raw.read(5)
+        while len(buff) > 0:
+            # The first 5 bytes are the message type and length
+            messageType, length = struct.unpack("!cI", buff)
+            message = response.raw.read(length)
+            yield messageType, message
+            buff = response.raw.read(5)
+
+    def _doRequest(self, httpMethod, url, protocolResponseClass,
+                   httpParams={}, httpData=None):
+        """
+        Performs a request to the server and returns the response
+        """
+        headers = {"Accept-Encoding": "ga4gh+json"}
+        params = self._getAuth()
+        params.update(httpParams)
+        self._logger.info("{0} {1}".format(httpMethod, url))
+        if httpData is not None:
+            headers.update({"Content-type": "application/json"})
+            self._debugRequest(httpData)
+        response = requests.request(
+            httpMethod, url, params=params, data=httpData, headers=headers,
+            stream=True)
+        print("Response header:")
+        for k, v in response.headers.items():
+            print("\t", k, "->", v)
+        self._checkStatus(response)
+        responseClass = None
+        for typeCode, message in self._decodeStream(response):
+            if typeCode == "T":
+                d = json.loads(message)
+                responseClass = getattr(protocol, d["class"])
+            elif typeCode == "D":
+                yield responseClass.fromJsonString(message)
+
+    def _runSearchRequest(
             self, protocolRequest, objectName, protocolResponseClass):
-        url = posixpath.join(self._urlPrefix, objectName + '/search')
+        fullUrl = posixpath.join(self._urlPrefix, objectName + '/search')
         data = protocolRequest.toJsonString()
-        self._logger.debug("request:{}".format(data))
-        response = self._session.post(
-            url, params=self._getHttpParameters(), data=data)
-        self._checkResponseStatus(response)
-        return self._deserializeResponse(response.text, protocolResponseClass)
+        return self._doRequest(
+            'POST', fullUrl, protocolResponseClass, httpData=data)
+
+
+    def _deserializeResponse(self, responseJson, protocolResponseClass):
+        return protocolResponseClass.fromJsonString(responseJson)
 
     def _runGetRequest(self, objectName, protocolResponseClass, id_):
         urlSuffix = "{objectName}/{id}".format(objectName=objectName, id=id_)
@@ -570,12 +558,6 @@ class LocalClient(AbstractClient):
     def _runGetRequest(self, objectName, protocolResponseClass, id_):
         getMethod = self._getMethodMap[objectName]
         responseJson = getMethod(id_)
-        return self._deserializeResponse(responseJson, protocolResponseClass)
-
-    def _runSearchPageRequest(
-            self, protocolRequest, objectName, protocolResponseClass):
-        searchMethod = self._searchMethodMap[objectName]
-        responseJson = searchMethod(protocolRequest.toJsonString())
         return self._deserializeResponse(responseJson, protocolResponseClass)
 
     def _runListReferenceBasesPageRequest(self, id_, request):
