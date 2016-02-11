@@ -436,6 +436,8 @@ class HttpClient(AbstractClient):
         self._session.headers.update(headers)
         # TODO is this unsafe????
         self._session.verify = False
+        self._session.config = {'danger_mode': True}
+        self._session.timeout = 5
 
     def _checkResponseStatus(self, response):
         """
@@ -482,7 +484,7 @@ class HttpClient(AbstractClient):
         if httpData is not None:
             headers.update({"Content-type": "application/json"})
             self._debugRequest(httpData)
-        response = requests.request(
+        response = self._session.request(
             'POST', url, params=params, data=httpData, headers=headers,
             stream=True)
         print("Response header:")
