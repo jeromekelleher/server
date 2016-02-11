@@ -13,6 +13,7 @@ import unittest
 import unittest.loader
 import unittest.suite
 import sys
+import time
 
 import requests
 
@@ -435,9 +436,17 @@ class SearchReadsRunner(AbstractSearchRunner):
                 self._output(iterator)
 
     def _writeBinaryFile(self, blocks):
+        before = time.clock()
+        transferred = 0
         with open(self._outputFile, 'w') as outputFile:
             for block in blocks:
                 outputFile.write(block)
+                transferred += len(block)
+        duration = time.clock() - before
+        megabytes = transferred / (1024 * 1024)
+        print("Transferred {}MB in {}s ({} MB/s)".format(
+            megabytes, duration, megabytes / duration))
+
 
 
     def run(self):
