@@ -409,6 +409,7 @@ class SearchReadsRunner(AbstractSearchRunner):
         self._referenceId = args.referenceId
         self._readGroupIds = None
         self._cramOutput = args.outputFormat == "cram"
+        self._outputFile = args.outputFile
         if args.readGroupIds is not None:
             self._readGroupIds = args.readGroupIds.split(",")
 
@@ -433,11 +434,11 @@ class SearchReadsRunner(AbstractSearchRunner):
             else:
                 self._output(iterator)
 
-
     def _writeBinaryFile(self, blocks):
-        print("Writing blocks")
-        for b in blocks:
-            print(len(b))
+        with open(self._outputFile, 'w') as outputFile:
+            for block in blocks:
+                outputFile.write(block)
+
 
     def run(self):
         """
@@ -796,6 +797,7 @@ def addReadsSearchParser(subparsers):
         help="Search for reads")
     parser.set_defaults(runner=SearchReadsRunner)
     addOutputFormatArgument(parser)
+    addOutputFileArgument(parser)
     addReadsSearchParserArguments(parser)
     return parser
 

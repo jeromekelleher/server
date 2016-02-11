@@ -7,6 +7,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import datetime
+import gzip
 import random
 
 import pysam
@@ -703,7 +704,17 @@ class HtslibReadGroup(datamodel.PysamDatamodelMixin, AbstractReadGroup):
         return self._runTime
 
 
+###################################################
+
+# \begin{hacky code}
+
 class HackedCramReadGroupSet(HtslibReadGroupSet):
+
+    def __init__(
+            self, parentContainer, localId, samFilePath, dataRepository):
+        super(HackedCramReadGroupSet, self).__init__(
+            parentContainer, localId, samFilePath, dataRepository)
+        self._slicer = CramFileSlicer(samFilePath)
 
     def _getReadGroupClass(self):
         return HackedCramReadGroup
@@ -716,7 +727,72 @@ class HackedCramReadGroup(HtslibReadGroup):
         raise ValueError("JSON not supported on CRAM --- FIXME!!")
 
     def getCramBlocks(self, reference, start=None, end=None):
-        # HACK!!!
+        slicer = self._parentContainer._slicer
+        # HACK!!!!!
         tid = int(reference.getLocalId()) - 1
-        print("Getting readAlignments for ", reference.getLocalId(), start, end)
-        return []
+        s = 0 if start is None else start
+        e = 2**31 - 1 if end is None else end
+        return slicer.get_cram_stream(tid, start, end)
+
+
+class CramFileSlicer(object):
+    """
+    A simple class to slice a CRAM file using the text index.
+    This code is based heavily on a Perl script by James Bonfield,
+    <jkb@sanger.ac.uk>.
+    """
+
+    def __init__(self, cram_path):
+        self._cram_path = cram_path
+        self._index_path = cram_path + ".crai"
+        self._cram_file = open(self._cram_path)
+        self._parse_index()
+        self._read_header()
+        self._eof = (
+            "\x0f\x00\x00\x00\xff\xff\xff\xff\x0f\xe0\x45\x4f\x46\x00\x00\x00"
+            "\x00\x01\x00\x05\xbd\xd9\x4f\x00\x01\x00\x06\x06\x01\x00\x01\x00"
+            "\x01\x00\xee\x63\x01\x4b")
+
+    def _parse_index(self):
+        self._tid_map = {}
+        self._index = []
+        j = 0
+        with gzip.open(self._index_path, "r") as f:
+            for line in f:
+                values = map(int, line.split())
+                tid = values[0]
+                if tid not in self._tid_map:
+                    self._tid_map[tid] = []
+                self._tid_map[tid].append(j)
+                self._index.append(values)
+                j += 1
+        # TODO add index entry for EOF; if we try to get the read
+        # at the end of the file we'll currently error.
+
+    def _read_header(self):
+        header_length = self._index[0][3]
+        self._header = self._cram_file.read(header_length)
+
+    def get_cram_stream(self, tid, start, end):
+        print("CRAM SLICE:", tid, start, end)
+        yield self._header
+        index = self._tid_map[tid]
+        blocks = []
+        for block_id in self._tid_map[tid]:
+            index_row = self._index[block_id]
+            block_start, block_end = self._index[block_id][1:3]
+            if block_start <= end:
+                blocks.append(block_id)
+            if block_end <= start:
+                blocks.append(block_id)
+        for block_id in blocks:
+            offset = self._index[block_id][3]
+            next_offset = self._index[block_id + 1][3]
+            length = next_offset - offset
+            self._cram_file.seek(offset)
+            block = self._cram_file.read(length)
+            yield block
+        yield self._eof
+
+    def close(self):
+        self._cram_file.close()
