@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 """
 Command line interface programs for the GA4GH reference implementation.
 
@@ -8,6 +9,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import argcomplete
 import glob
 import logging
 import operator
@@ -1545,6 +1547,36 @@ def getRawInput(display):
     return raw_input(display)
 
 
+def completeReferenceSet(prefix, parsed_args, **kwargs):
+    with open("trace.txt", "w") as f:
+        print("called ", prefix, parsed_args, file=f)
+    try:
+        repo = datarepo.SqlDataRepository(parsed_args.registryPath)
+        repo.open("r")
+        ret = [referenceSet.getLocalId() for
+                referenceSet in repo.getReferenceSets()
+                if referenceSet.getLocalId().startswith(prefix)]
+        repo.close()
+    except Exception as e:
+        with open("error.txt", "w") as f:
+            print("Eception occured", e, file=f)
+    return ret
+
+
+def completeDataset(prefix, parsed_args, **kwargs):
+    with open("trace.txt", "w") as f:
+        print("called ", prefix, parsed_args, file=f)
+    try:
+        repo = datarepo.SqlDataRepository(parsed_args.registryPath)
+        repo.open("r")
+        ret = [dataset.getLocalId() for dataset in repo.getDatasets() if dataset.getLocalId().startswith(prefix)]
+        repo.close()
+    except Exception as e:
+
+        with open("error.txt", "w") as f:
+            print("Eception occured", e, file=f)
+    return ret
+
 class RepoManager(object):
     """
     Class that provide command line functionality to manage a
@@ -1899,7 +1931,7 @@ class RepoManager(object):
     @classmethod
     def addDatasetNameArgument(cls, subparser):
         subparser.add_argument(
-            "datasetName", help="the name of the dataset")
+            "datasetName", help="the name of the dataset").completer = completeDataset
 
     @classmethod
     def addReferenceSetNameOption(cls, subparser, objectType):
@@ -1907,7 +1939,7 @@ class RepoManager(object):
             "the name of the reference set to associate with this {}"
         ).format(objectType)
         subparser.add_argument(
-            "-R", "--referenceSetName", default=None, help=helpText)
+            "-R", "--referenceSetName", default=None, help=helpText).completer = completeReferenceSet
 
     @classmethod
     def addSequenceOntologyNameOption(cls, subparser, objectType):
@@ -2149,6 +2181,7 @@ class RepoManager(object):
     @classmethod
     def runCommand(cls, args):
         parser = cls.getParser()
+        argcomplete.autocomplete(parser)
         parsedArgs = parser.parse_args(args)
         if "runner" not in parsedArgs:
             parser.print_help()
