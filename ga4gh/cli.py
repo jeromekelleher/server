@@ -1,9 +1,9 @@
-# PYTHON_ARGCOMPLETE_OK
 """
 Command line interface programs for the GA4GH reference implementation.
 
 TODO: document how to use these for development and simple deployment.
 """
+# PYTHON_ARGCOMPLETE_OK
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -1549,8 +1549,17 @@ def getRawInput(display):
 
 def completeReferenceSet(prefix, parsed_args, **kwargs):
     with open("trace.txt", "w") as f:
-        print("called ", prefix, parsed_args, file=f)
+        action = kwargs["action"]
+        print("called ", prefix, parsed_args, ":", kwargs, file=f)
+        print("action = ", action, file=f)
+        for k, v in action.__dict__.items():
+            print("\t", k, "->", v, file=f)
+
+        print("completer", file=f)
+        for k, v in action.completer.__dict__.items():
+            print("\t", k, "->", v, file=f)
     try:
+        # argcomplete.warn("parsed_args = ", parsed_args)
         repo = datarepo.SqlDataRepository(parsed_args.registryPath)
         repo.open("r")
         ret = [referenceSet.getLocalId() for
@@ -1565,7 +1574,7 @@ def completeReferenceSet(prefix, parsed_args, **kwargs):
 
 def completeDataset(prefix, parsed_args, **kwargs):
     with open("trace.txt", "w") as f:
-        print("called ", prefix, parsed_args, file=f)
+        print("called ", prefix, parsed_args, ":", kwargs, file=f)
     try:
         repo = datarepo.SqlDataRepository(parsed_args.registryPath)
         repo.open("r")
@@ -1576,6 +1585,7 @@ def completeDataset(prefix, parsed_args, **kwargs):
         with open("error.txt", "w") as f:
             print("Eception occured", e, file=f)
     return ret
+
 
 class RepoManager(object):
     """
@@ -1720,7 +1730,7 @@ class RepoManager(object):
             name = getNameFromPath(dataUrl)
         readGroupSet = reads.HtslibReadGroupSet(dataset, name)
         readGroupSet.populateFromFile(dataUrl, indexFile)
-        referenceSetName = self._args.referenceSetName
+        referenceSetName = self._args.referenceSetName[0]
         if referenceSetName is None:
             # Try to find a reference set name from the BAM header.
             referenceSetName = readGroupSet.getBamHeaderReferenceSetName()
@@ -1777,7 +1787,7 @@ class RepoManager(object):
         variantSet = variants.HtslibVariantSet(dataset, name)
         variantSet.populateFromFile(dataUrls, indexFiles)
         # Get the reference set that is associated with the variant set.
-        referenceSetName = self._args.referenceSetName
+        referenceSetName = self._args.referenceSetName[0]
         if referenceSetName is None:
             # Try to find a reference set name from the VCF header.
             referenceSetName = variantSet.getVcfHeaderReferenceSetName()
@@ -1930,16 +1940,23 @@ class RepoManager(object):
 
     @classmethod
     def addDatasetNameArgument(cls, subparser):
-        subparser.add_argument(
-            "datasetName", help="the name of the dataset").completer = completeDataset
+        action = subparser.add_argument(
+            "datasetName", help="the name of the dataset")
+        action.completer = completeDataset
 
     @classmethod
     def addReferenceSetNameOption(cls, subparser, objectType):
         helpText = (
             "the name of the reference set to associate with this {}"
         ).format(objectType)
-        subparser.add_argument(
-            "-R", "--referenceSetName", default=None, help=helpText).completer = completeReferenceSet
+        action = subparser.add_argument(
+            "-R", "--referenceSetName", help=helpText,
+            nargs="*")
+        # FIXME nargs=* here is just to get the argcomplete action working
+        # for completeReferenceSet. For obscure reasons we seem to need to
+        # have argparse not fail with zero arguments for this to work.
+
+        action.completer = completeReferenceSet
 
     @classmethod
     def addSequenceOntologyNameOption(cls, subparser, objectType):
@@ -2181,6 +2198,8 @@ class RepoManager(object):
     @classmethod
     def runCommand(cls, args):
         parser = cls.getParser()
+        # parsedArgs = parser.parse_args(args)
+        # print(parsedArgs)
         argcomplete.autocomplete(parser)
         parsedArgs = parser.parse_args(args)
         if "runner" not in parsedArgs:
