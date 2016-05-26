@@ -1548,18 +1548,8 @@ def getRawInput(display):
 
 
 def completeReferenceSet(prefix, parsed_args, **kwargs):
-    with open("trace.txt", "w") as f:
-        action = kwargs["action"]
-        print("called ", prefix, parsed_args, ":", kwargs, file=f)
-        print("action = ", action, file=f)
-        for k, v in action.__dict__.items():
-            print("\t", k, "->", v, file=f)
-
-        print("completer", file=f)
-        for k, v in action.completer.__dict__.items():
-            print("\t", k, "->", v, file=f)
     try:
-        # argcomplete.warn("parsed_args = ", parsed_args)
+        # argcomplete.warn("parsed_args = {}".format( parsed_args))
         repo = datarepo.SqlDataRepository(parsed_args.registryPath)
         repo.open("r")
         ret = [referenceSet.getLocalId() for
@@ -1730,7 +1720,7 @@ class RepoManager(object):
             name = getNameFromPath(dataUrl)
         readGroupSet = reads.HtslibReadGroupSet(dataset, name)
         readGroupSet.populateFromFile(dataUrl, indexFile)
-        referenceSetName = self._args.referenceSetName[0]
+        referenceSetName = self._args.referenceSetName
         if referenceSetName is None:
             # Try to find a reference set name from the BAM header.
             referenceSetName = readGroupSet.getBamHeaderReferenceSetName()
@@ -1787,7 +1777,7 @@ class RepoManager(object):
         variantSet = variants.HtslibVariantSet(dataset, name)
         variantSet.populateFromFile(dataUrls, indexFiles)
         # Get the reference set that is associated with the variant set.
-        referenceSetName = self._args.referenceSetName[0]
+        referenceSetName = self._args.referenceSetName
         if referenceSetName is None:
             # Try to find a reference set name from the VCF header.
             referenceSetName = variantSet.getVcfHeaderReferenceSetName()
@@ -1950,12 +1940,7 @@ class RepoManager(object):
             "the name of the reference set to associate with this {}"
         ).format(objectType)
         action = subparser.add_argument(
-            "-R", "--referenceSetName", help=helpText,
-            nargs="*")
-        # FIXME nargs=* here is just to get the argcomplete action working
-        # for completeReferenceSet. For obscure reasons we seem to need to
-        # have argparse not fail with zero arguments for this to work.
-
+            "-R", "--referenceSetName", help=helpText)
         action.completer = completeReferenceSet
 
     @classmethod
