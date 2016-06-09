@@ -130,9 +130,50 @@ class HtslibVariantSet(registry.VariantSet):
                 self.vcf_files.append(
                     VcfFile(data_url, index_file, reference_name))
 
-        # self._updateMetadata(varFile)
+        self._update_metadata(var_file)
+
         # self._updateCallSetIds(varFile)
         # self._updateVariantAnnotationSets(varFile, dataUrl)
+
+    def _update_metadata(self, var_file):
+        if len(self.variant_set_metadata) == 0:
+            self.variant_set_metadata = self._getMetadataFromVcf(var_file)
+
+    def _getMetadataFromVcf(self, varFile):
+        # TODO document this function and refactor it to use snake_case and
+        # get rid of the redundant buildMetadata function.
+
+        # TODO replace buildMetadata with constructor for VariantSetMetadata
+        def buildMetadata(
+                key, type_="String", number="1", value="", description=""):
+            metadata = registry.VariantSetMetadata()
+            metadata.key = key
+            metadata.value = value
+            metadata.type = type_
+            metadata.number = number
+            metadata.description = description
+            return metadata
+
+        header = varFile.header
+        ret = []
+        ret.append(buildMetadata(key="version", value=header.version))
+        formats = header.formats.items()
+        infos = header.info.items()
+        # TODO: currently ALT field is not implemented through pysam
+        # NOTE: contigs field is different between vcf files,
+        # so it's not included in metadata
+        # NOTE: filters in not included in metadata unless needed
+        for prefix, content in [("FORMAT", formats), ("INFO", infos)]:
+            for contentKey, value in content:
+                description = value.description.strip('"')
+                key = "{0}.{1}".format(prefix, value.name)
+                if key != "FORMAT.GT":
+                    ret.append(buildMetadata(
+                        key=key, type_=value.type,
+                        number="{}".format(value.number),
+                        description=description))
+        return ret
+
 
 
     def run_search(self, request, response_builder):

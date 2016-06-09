@@ -101,7 +101,23 @@ class SimulatedVariantSet(registry.VariantSet):
         super(SimulatedVariantSet, self).__init__(name)
         self.random_seed = random_seed
         self.variant_density = variant_density
+
+        self._create_metadata()
         print("New simulated variant set")
+
+
+    def _create_metadata(self):
+        metadata = registry.VariantSetMetadata(
+            key="version", value="VCFv4.1", type="String", number="1")
+        self.variant_set_metadata.append(metadata)
+        metadata = registry.VariantSetMetadata(
+            key="INFO.FIELD1", value="", type="String",
+            description="FIELD1 description")
+        self.variant_set_metadata.append(metadata)
+        metadata = registry.VariantSetMetadata(
+            key="INFO.FIELD2", type="Integer", number="1",
+            description="FIELD2 description")
+        self.variant_set_metadata.append(metadata)
 
 
     def run_search(self, request, response_builder):

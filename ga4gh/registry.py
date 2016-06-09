@@ -18,9 +18,16 @@ import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
 
 
+
+def get_external_id():
+    # TODO make this use SystemRandom and make a table specific prefix.
+    return random.randint(0, 2**31)
+
+
 def create_id_column():
     return sqlalchemy.Column(
-        sqlalchemy.Integer, primary_key=True, autoincrement=False)
+        sqlalchemy.Integer, primary_key=True, autoincrement=False,
+        default=get_external_id)
 
 
 SqlAlchemyBase = sqlalchemy.ext.declarative.declarative_base()
@@ -57,7 +64,8 @@ class Reference(SqlAlchemyBase):
     source_divergence = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
     reference_set_id = sqlalchemy.Column(
-        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"))
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
+        nullable=False)
     reference_set = orm.relationship("ReferenceSet", back_populates="references")
 
     type = sqlalchemy.Column(sqlalchemy.String)
@@ -142,6 +150,38 @@ class ReferenceSet(SqlAlchemyBase):
         ret.source_uri = self.source_uri
         return ret
 
+class VariantSetMetadata(SqlAlchemyBase):
+    __tablename__ = "VariantSetMetadata"
+
+    id = create_id_column()
+    key = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    value = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    type = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    number = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    variant_set_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("VariantSet.id"),
+        nullable=False)
+    variant_set = orm.relationship(
+        "VariantSet", back_populates="variant_set_metadata")
+
+    def __init__(self, key=None, value="", type="", number="", description=""):
+        self.key = key
+        self.value = value
+        self.type = type
+        self.number = number
+        self.description = description
+
+    def get_protobuf(self):
+        ret = protocol.VariantSetMetadata()
+        ret.id = str(self.id)
+        ret.key = self.key
+        ret.value = self.value
+        ret.type = self.type
+        ret.number = self.number
+        ret.description = self.description
+        return ret
+
 
 class VariantSet(SqlAlchemyBase):
     __tablename__ = 'VariantSet'
@@ -161,6 +201,9 @@ class VariantSet(SqlAlchemyBase):
         nullable=False)
     # reference_set = orm.relationship(
     #     "ReferenceSet", back_populates="reference_set")
+
+    variant_set_metadata = orm.relationship(
+        "VariantSetMetadata", cascade="all, delete, delete-orphan")
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
@@ -183,7 +226,8 @@ class VariantSet(SqlAlchemyBase):
         ret.name = self.name
         ret.dataset_id = str(self.dataset_id)
         ret.reference_set_id = str(self.reference_set_id)
-        # protocolElement.metadata.extend(self.getMetadata())
+        metadata = [m.get_protobuf() for m in self.variant_set_metadata]
+        ret.metadata.extend(metadata)
         return ret
 
 
@@ -262,9 +306,6 @@ class RegistryDb(object):
         """
         Adds the specified reference set to this data repository.
         """
-        reference_set.id = self.get_new_id()
-        for reference in reference_set.references:
-            reference.id = self.get_new_id()
         try:
             self._session.add(reference_set)
             self._session.commit()
@@ -275,7 +316,6 @@ class RegistryDb(object):
         """
         Adds the specified dataset to this data repository.
         """
-        dataset.id = self.get_new_id()
         try:
             self._session.add(dataset)
             self._session.commit()
@@ -286,7 +326,6 @@ class RegistryDb(object):
         """
         Adds the specified variant_set to this data repository.
         """
-        variant_set.id = self.get_new_id()
         try:
             self._session.add(variant_set)
             self._session.commit()
@@ -350,6 +389,11 @@ class RegistryDb(object):
         if result is None:
             raise exceptions.ReferenceNotFoundException(id_)
         return result
+
+    # General getters to iterate over all objects in a class.
+
+    def get_reference_sets(self):
+        return self._session.query(ReferenceSet).all()
 
     # Getters to provide queries corresponding to the external search requests.
 

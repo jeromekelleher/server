@@ -6,8 +6,8 @@ import ga4gh.registry as registry
 import ga4gh.datasource.simulator as simulator
 import ga4gh.datasource.htslib as htslib
 
-# db = registry.RegistryDb("postgres://ga4gh-dev:password@localhost/ga4gh-registry")
-db = registry.RegistryDb("sqlite:///registry.db")
+db = registry.RegistryDb("postgres://ga4gh-dev:password@localhost/ga4gh-registry")
+# db = registry.RegistryDb("sqlite:///registry.db")
 db.open()
 db.initialise()
 
@@ -38,5 +38,10 @@ variant_set.dataset_id = dataset.id
 variant_set.reference_set_id = rs1.id
 db.add_variant_set(variant_set)
 
+for metadata in variant_set.variant_set_metadata:
+    print(metadata.id, metadata.key)
+
+for rs in db.get_reference_sets():
+    print(rs.id, rs.name)
 
 db.close()

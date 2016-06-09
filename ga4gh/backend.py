@@ -10,6 +10,11 @@ from __future__ import unicode_literals
 import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
 
+# We must import these modules before queries are run, or we won't be
+# able to load the polymorphic types at run time.
+import ga4gh.datasource.simulator as simulator
+import ga4gh.datasource.htslib as htslib
+
 # import ga4gh.datamodel.references as references
 
 def _parseIntegerArgument(args, key, defaultValue):
