@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 # import ga4gh.datamodel as datamodel
 import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
+import ga4gh.registry as registry
 
 # We must import these modules before queries are run, or we won't be
 # able to load the polymorphic types at run time.
@@ -658,11 +659,18 @@ class Backend(object):
         Returns a generator over the (variant, nextPageToken) pairs defined
         by the specified request.
         """
-        print("got requuest", request)
         variant_set = self._dataRepository.get_variant_set(
                 request.variant_set_id)
-        print("variant set = ", variant_set)
-        variant_set.run_search(request, response_builder)
+        call_sets = []
+        # Avoid the query to find call_sets unless we need to.
+        if len(request.call_set_ids) > 0:
+            call_sets = variant_set.call_sets.filter(
+                registry.CallSet.id.in_(request.call_set_ids)).all()
+        if len(call_sets) != len(request.call_set_ids):
+            # TODO get the offending call set ID.
+            raise exceptions.CallSetNotInVariantSetException(
+                    "TODO" , variant_set.id)
+        variant_set.run_search(request, call_sets, response_builder)
 
         # compoundId = datamodel.VariantSetCompoundId \
         #     .parse(request.variant_set_id)

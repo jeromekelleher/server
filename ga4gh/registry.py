@@ -18,17 +18,6 @@ import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
 
 
-def datetime_to_milliseconds(t):
-    """
-    Converts the specified datetime object into its appropriate protocol
-    value. This is the number of milliseconds from the epoch.
-    """
-    epoch = datetime.datetime.utcfromtimestamp(0)
-    delta = t - epoch
-    millis = delta.total_seconds() * 1000
-    return int(millis)
-
-
 def get_external_id():
     # TODO make this use SystemRandom and make a table specific prefix.
     return random.randint(0, 2**31)
@@ -48,6 +37,21 @@ def create_timestamp_column():
 
 
 SqlAlchemyBase = sqlalchemy.ext.declarative.declarative_base()
+
+class Info(SqlAlchemyBase):
+    """
+    A generic key-value table used to store info maps used in various
+    places in the schema.
+    """
+    # TODO complete this. We probably need a more complicated
+    # relationship because we can multiple values per key.
+    __tablename__ = 'Info'
+
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, primary_key=True, autoincrement=True)
+    key = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
+    value = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
 
 
 class Dataset(SqlAlchemyBase):
@@ -228,8 +232,10 @@ class CallSet(SqlAlchemyBase):
         ret.id = str(self.id)
         ret.name = self.name
         ret.sample_id = self.sample_id
-        ret.created = datetime_to_milliseconds(self.creation_timestamp)
-        ret.updated = datetime_to_milliseconds(self.update_timestamp)
+        ret.created = protocol.datetime_to_milliseconds(
+            self.creation_timestamp)
+        ret.updated = protocol.datetime_to_milliseconds(
+            self.update_timestamp)
         ret.variant_set_ids.extend(str(vs.id) for vs in self.variant_sets)
         # TODO create a generic Info table that can hold these values
         # for a variety of different tables. Or it may be simpler to create
@@ -267,7 +273,7 @@ class VariantSet(SqlAlchemyBase):
         "VariantSetMetadata", cascade="all, delete, delete-orphan")
     call_sets = orm.relationship(
         "CallSet", secondary=call_set_association_table,
-        back_populates="variant_sets")
+        back_populates="variant_sets", lazy="dynamic")
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {

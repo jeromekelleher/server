@@ -54,6 +54,17 @@ _valueListNameMap = {
 }
 
 
+def datetime_to_milliseconds(t):
+    """
+    Converts the specified datetime object into the number of milliseconds
+    since the epoch.
+    """
+    epoch = datetime.datetime.utcfromtimestamp(0)
+    delta = t - epoch
+    millis = delta.total_seconds() * 1000
+    return int(millis)
+
+
 def getValueListName(protocolResponseClass):
     """
     Returns the name of the attribute in the specified protocol class

@@ -143,7 +143,7 @@ class HtslibVariantSet(registry.VariantSet):
         """
         Updates the call set IDs based on the specified variant file.
         """
-        if len(self.call_sets) == 0:
+        if self.call_sets.count() == 0:
             for sample in variantFile.header.samples:
                 call_set = registry.CallSet(name=sample, sample_id=sample)
                 self.call_sets.append(call_set)
@@ -185,9 +185,7 @@ class HtslibVariantSet(registry.VariantSet):
                         description=description))
         return ret
 
-
-
-    def run_search(self, request, response_builder):
+    def run_search(self, request, call_sets, response_builder):
         print("running search on ", request, response_builder)
         print("reference name =", type(request.reference_name), request.reference_name)
         # First get the VCF file for this reference.

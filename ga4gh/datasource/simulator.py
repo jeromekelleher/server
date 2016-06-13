@@ -13,6 +13,7 @@ import sqlalchemy
 import sqlalchemy.orm as orm
 
 import ga4gh.registry as registry
+import ga4gh.protocol as protocol
 
 
 class SimulatedReferenceSet(registry.ReferenceSet):
@@ -90,17 +91,15 @@ class SimulatedVariantSet(registry.VariantSet):
         sqlalchemy.Integer, sqlalchemy.ForeignKey('VariantSet.id'),
         primary_key=True)
     random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
-    variant_density = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
 
     __mapper_args__ = {
         'polymorphic_identity':'SimulatedVariantSet',
     }
 
     def __init__(
-            self, name, random_seed, num_calls=1, variant_density=1):
+            self, name, random_seed, num_calls=1):
         super(SimulatedVariantSet, self).__init__(name)
         self.random_seed = random_seed
-        self.variant_density = variant_density
         self._create_metadata()
         for i in range(num_calls):
             name = "simCallSet_{}".format(i)
@@ -124,16 +123,83 @@ class SimulatedVariantSet(registry.VariantSet):
             description="FIELD2 description")
         self.variant_set_metadata.append(metadata)
 
+    def get_variant_id(self, variant):
+        """
+        Returns an ID suitable for the specifid variant.
+        """
+        # TODO this should be done generally using the CompoundId
+        # infrastructure.
+        return "{}:{}:{}".format(
+            self.id, variant.reference_name, variant.start)
 
-    def run_search(self, request, response_builder):
-        print("running search on ", request, response_builder)
-        for j in range(10):
-            variant = protocol.Variant()
-            variant.variant_set_id = str(self.id)
-            variant.reference_name = request.reference_name
-            variant.start = j
-            variant.end = j + 1
-            response_builder.addValue(variant)
+    def generate_variant(self, reference_name, call_sets, position):
+        """
+        Generate a random variant for the specified position.
+        """
+        rng = random.Random()
+        rng.seed(self.random_seed + position)
+        variant = protocol.Variant()
+        variant.variant_set_id = str(self.id)
+        variant.reference_name = reference_name
+        variant.created = protocol.datetime_to_milliseconds(
+            self.creation_timestamp)
+        variant.updated = protocol.datetime_to_milliseconds(
+            self.update_timestamp)
+        variant.start = position
+        variant.end = position + 1  # SNPs only for now
+        bases = ["A", "C", "G", "T"]
+        ref = rng.choice(bases)
+        variant.reference_bases = ref
+        alt = rng.choice([base for base in bases if base != ref])
+        variant.alternate_bases.append(alt)
+        for call_set in call_sets:
+            call = variant.calls.add()
+            call.call_set_id = str(call_set.id)
+            call.call_set_name = call_set.name
+            # for now, the genotype is either [0,1], [1,1] or [1,0] with equal
+            # probability; probably will want to do something more
+            # sophisticated later.
+            random_choice = rng.choice([[0, 1], [1, 0], [1, 1]])
+            call.genotype.extend(random_choice)
+            # TODO What is a reasonable model for generating these likelihoods?
+            # Are these log-scaled? Spec does not say.
+            call.genotype_likelihood.extend([-100, -100, -100])
+        variant.id = self.get_variant_id(variant)
+        return variant
+
+    def run_search(self, request, call_sets, response_builder):
+        start = request.start
+        if request.page_token:
+            # TODO this should raise the correct error.
+            start = int(request.page_token)
+        i = start
+        while i < request.end and not response_builder.isFull():
+            response_builder.addValue(
+                self.generate_variant(request.reference_name, call_sets, i))
+            i += 1
+        if i != request.end:
+            response_builder.setNextPageToken(str(i))
+
+
+#     def getVariant(self, compoundId):
+#         randomNumberGenerator = random.Random()
+#         start = int(compoundId.start)
+#         randomNumberGenerator.seed(self._randomSeed + start)
+#         variant = self.generateVariant(
+#             compoundId.reference_name, start, randomNumberGenerator)
+#         return variant
+
+#     def getVariants(self, referenceName, startPosition, endPosition,
+#                     callSetIds=None):
+#         randomNumberGenerator = random.Random()
+#         randomNumberGenerator.seed(self._randomSeed)
+#         i = startPosition
+#         while i < endPosition:
+#             if randomNumberGenerator.random() < self._variantDensity:
+#                 randomNumberGenerator.seed(self._randomSeed + i)
+#                 yield self.generateVariant(
+#                     referenceName, i, randomNumberGenerator)
+#             i += 1
 
 
 
