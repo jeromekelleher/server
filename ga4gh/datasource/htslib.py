@@ -13,8 +13,10 @@ import collections
 import pysam
 import sqlalchemy
 import sqlalchemy.orm as orm
+import google.protobuf.struct_pb2 as struct_pb2
 
 import ga4gh.registry as registry
+import ga4gh.protocol as protocol
 
 _nothing = object()
 
@@ -25,6 +27,103 @@ def is_empty_iter(it):
     """
     return next(it, _nothing) is _nothing
 
+
+def _encodeValue(value):
+    # TODO give this a better name.
+    if isinstance(value, (list, tuple)):
+        return [struct_pb2.Value(string_value=str(v)) for v in value]
+    else:
+        return [struct_pb2.Value(string_value=str(value))]
+
+
+
+class PysamMixin(object):
+    """
+    A mixin class to simplify working with DatamodelObjects based on
+    directories of files interpreted using pysam. This mixin is designed
+    to work within the DatamodelObject hierarchy.
+    """
+    samMin = 0
+    samMaxStart = 2**30 - 1
+    samMaxEnd = 2**30
+
+    vcfMin = -2**31
+    vcfMax = 2**31 - 1
+
+    fastaMin = 0
+    fastaMax = 2**30 - 1
+
+    rNameMin = 0
+    rNameMax = 85
+
+    maxStringLength = 2**10  # arbitrary
+
+    @classmethod
+    def sanitizeVariantFileFetch(cls, contig=None, start=None, stop=None):
+        if contig is not None:
+            contig = cls.sanitizeString(contig, 'contig')
+        if start is not None:
+            start = cls.sanitizeInt(start, cls.vcfMin, cls.vcfMax, 'start')
+        if stop is not None:
+            stop = cls.sanitizeInt(stop, cls.vcfMin, cls.vcfMax, 'stop')
+        if start is not None and stop is not None:
+            cls.assertValidRange(start, stop, 'start', 'stop')
+        return contig, start, stop
+
+    @classmethod
+    def sanitizeAlignmentFileFetch(cls, start=None, end=None):
+        if start is not None:
+            start = cls.sanitizeInt(
+                start, cls.samMin, cls.samMaxStart, 'start')
+        if end is not None:
+            end = cls.sanitizeInt(end, cls.samMin, cls.samMaxEnd, 'end')
+        if start is not None and end is not None:
+            cls.assertValidRange(start, end, 'start', 'end')
+        return start, end
+
+    @classmethod
+    def assertValidRange(cls, start, end, startName, endName):
+        if start > end:
+            message = "invalid coordinates: {} ({}) " \
+                "greater than {} ({})".format(startName, start, endName, end)
+            raise exceptions.DatamodelValidationException(message)
+
+    @classmethod
+    def assertInRange(cls, attr, minVal, maxVal, attrName):
+        message = "invalid {} '{}' outside of range [{}, {}]"
+        if attr < minVal:
+            raise exceptions.DatamodelValidationException(message.format(
+                attrName, attr, minVal, maxVal))
+        if attr > maxVal:
+            raise exceptions.DatamodelValidationException(message.format(
+                attrName, attr, minVal, maxVal))
+
+    @classmethod
+    def assertInt(cls, attr, attrName):
+        if not isinstance(attr, (int, long)):
+            message = "invalid {} '{}' not an int".format(attrName, attr)
+            raise exceptions.DatamodelValidationException(message)
+
+    @classmethod
+    def sanitizeInt(cls, attr, minVal, maxVal, attrName):
+        cls.assertInt(attr, attrName)
+        if attr < minVal:
+            attr = minVal
+        if attr > maxVal:
+            attr = maxVal
+        return attr
+
+    @classmethod
+    def sanitizeString(cls, attr, attrName):
+        if not isinstance(attr, basestring):
+            message = "invalid {} '{}' not a string".format(
+                attrName, attr)
+            raise exceptions.DatamodelValidationException(message)
+        if isinstance(attr, unicode):
+            attr = attr.encode('utf8')
+        if len(attr) > cls.maxStringLength:
+            attr = attr[:cls.maxStringLength]
+        return attr
 
 
 class HtslibReferenceSet(registry.ReferenceSet):
@@ -68,7 +167,7 @@ class VcfFile(registry.SqlAlchemyBase):
         self.reference_name = reference_name
 
 
-class HtslibVariantSet(registry.VariantSet):
+class HtslibVariantSet(registry.VariantSet, PysamMixin):
     __tablename__ = 'HtslibVariantSet'
     id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey('VariantSet.id'),
@@ -185,16 +284,96 @@ class HtslibVariantSet(registry.VariantSet):
                         description=description))
         return ret
 
+
+    def _update_ga_call(self, ga_call, pysam_call):
+        phaseset = ""
+        if pysam_call.phased:
+            # TODO this gives phaseset = "True"; is this correct???
+            phaseset = str(pysam_call.phased)
+        genotypeLikelihood = []
+        info = {}
+        for key, value in pysam_call.iteritems():
+            if key == 'GL' and value is not None:
+                genotypeLikelihood = list(value)
+            elif key != 'GT':
+                info[key] = _encodeValue(value)
+        ga_call.genotype.extend(list(pysam_call.allele_indices))
+        ga_call.phaseset = phaseset
+        ga_call.genotype_likelihood.extend(genotypeLikelihood)
+        for key in info:
+            ga_call.info[key].values.extend(info[key])
+
+    def get_variant_id(self, variant):
+        bases = variant.reference_bases + str(tuple(variant.alternate_bases))
+        bases_hash = hashlib.md5(bases).hexdigest()
+        id_str = "{}:{}:{}:{}:{}".format(
+            self.id, variant.reference_name, variant.start, variant.end,
+            bases_hash)
+        return id_str
+
+    def convert_variant(self, record, call_sets):
+        """
+        Converts the specified pysam variant record into a GA4GH Variant
+        object. Only calls for the specified list of call_sets will
+        be included.
+        """
+        variant = protocol.Variant()
+        variant.variant_set_id = str(self.id)
+        variant.reference_name = record.contig
+        if record.id is not None:
+            variant.names.extend(record.id.split(';'))
+        variant.start = record.start          # 0-based inclusive
+        variant.end = record.stop             # 0-based exclusive
+        variant.reference_bases = record.ref
+        if record.alts is not None:
+            variant.alternate_bases.extend(list(record.alts))
+        # record.filter and record.qual are also available, when supported
+        # by GAVariant.
+        for key, value in record.info.iteritems():
+            if value is not None:
+                if isinstance(value, str):
+                    value = value.split(',')
+                variant.info[key].values.extend(_encodeValue(value))
+        for call_set in call_sets:
+            pysam_call = record.samples[call_set.sample_id.encode()]
+            ga_call = variant.calls.add()
+            ga_call.call_set_id = str(call_set.id)
+            ga_call.call_set_name = str(call_set.sample_id)
+            self._update_ga_call(ga_call, pysam_call)
+        variant.id = self.get_variant_id(variant)
+        return variant
+
     def run_search(self, request, call_sets, response_builder):
-        print("running search on ", request, response_builder)
-        print("reference name =", type(request.reference_name), request.reference_name)
         # First get the VCF file for this reference.
         vcf_file = self.vcf_files.filter(
             VcfFile.reference_name == request.reference_name).first()
         if vcf_file is not None:
-            print("vcf_file", vcf_file.data_url)
-        else:
-            print("Not found")
+            var_file = file_handle_cache.get_file_handle(
+                vcf_file.data_url, pysam.VariantFile, vcf_file.data_url,
+                index_filename=vcf_file.index_url)
+            the_start = request.start
+            skip_required = False
+            if request.page_token:
+                tokens = request.page_token.split(":")
+                the_start = int(tokens[2])
+            reference_name, start, end = self.sanitizeVariantFileFetch(
+                request.reference_name, the_start, request.end)
+            cursor = var_file.fetch(reference_name, start, end)
+            variant = None
+            if request.page_token:
+                # If we have a pagetoken, we must skip ahead until we reach the
+                # variant with this ID.
+                for record in cursor:
+                    variant = self.convert_variant(record, call_sets)
+                    if variant.id == request.page_token:
+                        break
+            for record in cursor:
+                variant = self.convert_variant(record, call_sets)
+                response_builder.addValue(variant)
+                if response_builder.isFull():
+                    break
+            if response_builder.isFull():
+                response_builder.setNextPageToken(variant.id)
 
 
     def getVcfHeaderReferenceSetName(self):
@@ -259,33 +438,33 @@ class PysamFileHandleCache(object):
         """
         return self._memoTable.keys()
 
-    def getFileHandle(self, dataFile, openMethod):
+    def get_file_handle(self, url, open_func, *args, **kwargs):
         """
         Returns handle associated to the filename. If the file is
         already opened, update its priority in the cache and return
         its handle. Otherwise, open the file using openMethod, store
         it in the cache and return the corresponding handle.
         """
-        if dataFile in self._memoTable:
-            handle = self._memoTable[dataFile]
-            self._update(dataFile, handle)
+        if url in self._memoTable:
+            handle = self._memoTable[url]
+            self._update(url, handle)
             return handle
         else:
             try:
-                handle = openMethod(dataFile)
+                handle = open_func(*args, **kwargs)
             except ValueError:
-                raise exceptions.FileOpenFailedException(dataFile)
+                raise exceptions.FileOpenFailedException(url)
 
-            self._memoTable[dataFile] = handle
-            self._add(dataFile, handle)
+            self._memoTable[url] = handle
+            self._add(url, handle)
             if len(self._memoTable) > self._maxCacheSize:
-                dataFile = self._removeLru()
-                del self._memoTable[dataFile]
+                url = self._removeLru()
+                del self._memoTable[url]
             return handle
 
 
-# LRU cache of open file handles
-fileHandleCache = PysamFileHandleCache()
 
+# LRU cache of open file handles
+file_handle_cache = PysamFileHandleCache()
 
 

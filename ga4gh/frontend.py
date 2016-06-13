@@ -202,7 +202,7 @@ def configure(configFile=None, baseConfig="ProductionConfig",
         app.config.from_pyfile(configFile)
     app.config.update(extraConfig.items())
     # Setup file handle cache max size
-    htslib.fileHandleCache.setMaxCacheSize(
+    htslib.file_handle_cache.setMaxCacheSize(
         app.config["FILE_HANDLE_CACHE_MAX_SIZE"])
     # Setup CORS
     cors.CORS(app, allow_headers='Content-Type')
