@@ -830,14 +830,11 @@ class Backend(object):
         Runs a listReferenceBases request for the specified ID and
         request arguments.
         """
-        compoundId = datamodel.ReferenceCompoundId.parse(id_)
-        referenceSet = self.getDataRepository().getReferenceSet(
-            compoundId.reference_set_id)
-        reference = referenceSet.getReference(id_)
+        reference = self.getDataRepository().get_reference(id_)
         start = _parseIntegerArgument(requestArgs, 'start', 0)
-        end = _parseIntegerArgument(requestArgs, 'end', reference.getLength())
+        end = _parseIntegerArgument(requestArgs, 'end', reference.length)
         if end == 0:  # assume meant "get all"
-            end = reference.getLength()
+            end = reference.length
         if 'pageToken' in requestArgs:
             pageTokenStr = requestArgs['pageToken']
             if pageTokenStr != "":
@@ -848,7 +845,8 @@ class Backend(object):
         if start + chunkSize < end:
             end = start + chunkSize
             nextPageToken = str(start + chunkSize)
-        sequence = reference.getBases(start, end)
+        reference.check_query_range(start, end)
+        sequence = reference.run_get_bases(start, end)
 
         # build response
         response = protocol.ListReferenceBasesResponse()

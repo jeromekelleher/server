@@ -79,9 +79,8 @@ class SimulatedReference(registry.Reference):
         #             random.randint(1, 2**32)))
         self._sourceUri = "http://example.com/reference.fa"
 
-    def getBases(self, start, end):
-        self.checkQueryRange(start, end)
-        return self._bases[start:end]
+    def run_get_bases(self, start, end):
+        return self.bases[start:end]
 
 
 class SimulatedVariantSet(registry.VariantSet):

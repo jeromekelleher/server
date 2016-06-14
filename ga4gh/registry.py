@@ -122,6 +122,14 @@ class Reference(SqlAlchemyBase):
         ret.source_uri = self.source_uri
         return ret
 
+    def check_query_range(self, start, end):
+        condition = (
+            (start < 0 or end > self.length) or
+            start > end or start == end)
+        if condition:
+            raise exceptions.ReferenceRangeErrorException(self.id, start, end)
+
+
 class ReferenceSet(SqlAlchemyBase):
     __tablename__ = 'ReferenceSet'
 

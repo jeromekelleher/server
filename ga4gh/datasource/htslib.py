@@ -126,13 +126,32 @@ class PysamMixin(object):
             attr = attr[:cls.maxStringLength]
         return attr
 
+    def get_file_handle(self, open_func, url, *args, **kwargs):
+        return file_handle_cache.get_file_handle(
+            url, open_func, url, *args, **kwargs)
+
+
+class HtslibReference(registry.Reference, PysamMixin):
+    __tablename__ = 'HtslibReference'
+
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('Reference.id'),
+        primary_key=True)
+    fasta_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    __mapper_args__ = {
+        'polymorphic_identity':'HtslibReference',
+    }
+
+    def run_get_bases(self, start, end):
+        fasta_file = self.get_file_handle(pysam.FastaFile, self.fasta_url)
+        bases = fasta_file.fetch(self.name.encode(), start, end)
+        return bases
 
 class HtslibReferenceSet(registry.ReferenceSet):
     __tablename__ = 'HtslibReferenceSet'
     id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey('ReferenceSet.id'),
         primary_key=True)
-    fasta_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
 
     __mapper_args__ = {
         'polymorphic_identity':'HtslibReferenceSet',
@@ -140,13 +159,13 @@ class HtslibReferenceSet(registry.ReferenceSet):
 
     def __init__(self, name, fasta_url):
         super(HtslibReferenceSet, self).__init__(name)
-        self.fasta_url = fasta_url
         with pysam.FastaFile(fasta_url) as fasta_file:
             for reference_name in fasta_file.references:
-                reference = registry.Reference(reference_name)
+                reference = HtslibReference(reference_name)
                 bases = fasta_file.fetch(reference_name)
                 reference.md5checksum = hashlib.md5(bases).hexdigest()
                 reference.length = len(bases)
+                reference.fasta_url = fasta_url
                 self.references.append(reference)
         # Now that we have all the references, set the md5checksum
         self._compute_md5checksum()
@@ -355,8 +374,8 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         vcf_file = self.vcf_files.filter(
             VcfFile.reference_name == request.reference_name).first()
         if vcf_file is not None:
-            var_file = file_handle_cache.get_file_handle(
-                vcf_file.data_url, pysam.VariantFile, vcf_file.data_url,
+            var_file = self.get_file_handle(
+                pysam.VariantFile, vcf_file.data_url,
                 index_filename=vcf_file.index_url)
             the_start = request.start
             skip_required = False
@@ -388,8 +407,8 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
             VcfFile.reference_name == compound_id.reference_name).first()
         if vcf_file is None:
             raise exceptions.ObjectNotFoundException(compound_id)
-        var_file = file_handle_cache.get_file_handle(
-            vcf_file.data_url, pysam.VariantFile, vcf_file.data_url,
+        var_file = self.get_file_handle(
+            pysam.VariantFile, vcf_file.data_url,
             index_filename=vcf_file.index_url)
         start = int(compound_id.start)
         reference_name, start, end = self.sanitizeVariantFileFetch(
