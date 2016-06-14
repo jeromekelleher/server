@@ -17,6 +17,7 @@ import google.protobuf.struct_pb2 as struct_pb2
 
 import ga4gh.registry as registry
 import ga4gh.protocol as protocol
+import ga4gh.exceptions as exceptions
 
 _nothing = object()
 
@@ -306,10 +307,11 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
     def get_variant_id(self, variant):
         bases = variant.reference_bases + str(tuple(variant.alternate_bases))
         bases_hash = hashlib.md5(bases).hexdigest()
-        id_str = "{}:{}:{}:{}:{}".format(
-            self.id, variant.reference_name, variant.start, variant.end,
+        # TODO get rid of redundant None here
+        compound_id = registry.VariantCompoundId(
+            None, str(self.id), variant.reference_name, str(variant.start),
             bases_hash)
-        return id_str
+        return str(compound_id)
 
     def convert_variant(self, record, call_sets):
         """
@@ -320,6 +322,10 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         variant = protocol.Variant()
         variant.variant_set_id = str(self.id)
         variant.reference_name = record.contig
+        variant.created = protocol.datetime_to_milliseconds(
+            self.creation_timestamp)
+        variant.updated = protocol.datetime_to_milliseconds(
+            self.update_timestamp)
         if record.id is not None:
             variant.names.extend(record.id.split(';'))
         variant.start = record.start          # 0-based inclusive
@@ -343,6 +349,7 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         variant.id = self.get_variant_id(variant)
         return variant
 
+    # TODO refactor the common code in these external methods.
     def run_search(self, request, call_sets, response_builder):
         # First get the VCF file for this reference.
         vcf_file = self.vcf_files.filter(
@@ -354,8 +361,9 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
             the_start = request.start
             skip_required = False
             if request.page_token:
-                tokens = request.page_token.split(":")
-                the_start = int(tokens[2])
+                compound_id = registry.VariantCompoundId.parse(
+                    request.page_token)
+                the_start = int(compound_id.start)
             reference_name, start, end = self.sanitizeVariantFileFetch(
                 request.reference_name, the_start, request.end)
             cursor = var_file.fetch(reference_name, start, end)
@@ -374,6 +382,27 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
                     break
             if response_builder.isFull():
                 response_builder.setNextPageToken(variant.id)
+
+    def run_get_variant(self, compound_id):
+        vcf_file = self.vcf_files.filter(
+            VcfFile.reference_name == compound_id.reference_name).first()
+        if vcf_file is None:
+            raise exceptions.ObjectNotFoundException(compound_id)
+        var_file = file_handle_cache.get_file_handle(
+            vcf_file.data_url, pysam.VariantFile, vcf_file.data_url,
+            index_filename=vcf_file.index_url)
+        start = int(compound_id.start)
+        reference_name, start, end = self.sanitizeVariantFileFetch(
+                compound_id.reference_name, start, start + 1)
+        cursor = var_file.fetch(reference_name, start, end)
+        id_str = str(compound_id)
+        for record in cursor:
+            variant = self.convert_variant(record, self.call_sets)
+            if variant.id == id_str:
+                return variant
+            elif record.start > start:
+                raise exceptions.ObjectNotFoundException()
+        raise exceptions.ObjectNotFoundException(compoundId)
 
 
     def getVcfHeaderReferenceSetName(self):

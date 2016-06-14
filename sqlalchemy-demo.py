@@ -2,6 +2,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import glob
+
 import ga4gh.registry as registry
 import ga4gh.datasource.simulator as simulator
 import ga4gh.datasource.htslib as htslib
@@ -26,9 +28,11 @@ for j in range(1):
 dataset = registry.Dataset("ds1")
 db.add_dataset(dataset)
 
-vcf = "tests/data/datasets/dataset1/variants/1kgPhase1/chr1.vcf.gz"
+vcfs = glob.glob(
+    "tests/data/datasets/dataset1/variants/1kgPhase1/chr*.vcf.gz")
+indexes = [vcf + ".tbi" for vcf in vcfs]
 
-variant_set = htslib.HtslibVariantSet("vs1", [vcf], [vcf + ".tbi"])
+variant_set = htslib.HtslibVariantSet("vs1", vcfs, indexes)
 variant_set.dataset_id = dataset.id
 variant_set.reference_set_id = rs1.id
 db.add_variant_set(variant_set)

@@ -517,8 +517,9 @@ class VariantFormatterMixin(object):
                 variant.reference_name, variant.start, variant.end,
                 variant.reference_bases, variant.alternate_bases,
                 sep="\t", end="\t")
-            for key, value in variant.info.items():
-                print(key, value, sep="=", end=";")
+            # TODO fix protobuf
+            # for key, valueList in variant.info.items():
+            #     print(key, value, sep="=", end=";")
             print("\t", end="")
             for c in variant.calls:
                 print(

@@ -871,15 +871,15 @@ class Backend(object):
         """
         Returns a variant with the given id
         """
-        compoundId = datamodel.VariantCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        variantSet = dataset.getVariantSet(compoundId.variant_set_id)
-        gaVariant = variantSet.getVariant(compoundId)
+        compound_id = registry.VariantCompoundId.parse(id_)
+        variant_set = self.getDataRepository().get_variant_set(
+                int(compound_id.variant_set_id))
+        variant = variant_set.run_get_variant(compound_id)
         # TODO variant is a special case here, as it's returning a
         # protocol element rather than a datamodel object. We should
         # fix this for consistency.
-        jsonString = protocol.toJson(gaVariant)
-        return jsonString
+        json_string = protocol.toJson(variant)
+        return json_string
 
     def runGetBioSample(self, id_):
         """

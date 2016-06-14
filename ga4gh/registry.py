@@ -8,6 +8,8 @@ from __future__ import unicode_literals
 import random
 import hashlib
 import datetime
+import json
+import base64
 
 import sqlalchemy
 import sqlalchemy.exc
@@ -525,3 +527,200 @@ class RegistryDb(object):
         if request.name:
             query = query.filter(CallSet.name == request.name)
         return query
+
+
+#################
+# TODO Compound ID class should be greatly simplified.
+#################
+
+class CompoundId(object):
+    """
+    Base class for an id composed of several different parts.  Each
+    compound ID consists of a set of fields, each of which corresponds to a
+    local ID in the data hierarchy. For example, we might have fields like
+    ["dataset", "variantSet"] for a variantSet.  These are available as
+    cid.dataset, and cid.variantSet.  The actual IDs of the containing
+    objects can be obtained using the corresponding attributes, e.g.
+    cid.datasetId and cid.variantSetId.
+    """
+    fields = []
+    """
+    The fields that the compound ID is composed of. These are parsed and
+    made available as attributes on the object.
+    """
+    containerIds = []
+    """
+    The fields of the ID form a breadcrumb trail through the data
+    hierarchy, and successive prefixes provide the IDs for objects
+    further up the tree. This list is a set of tuples giving the
+    name and length of a given prefix forming an identifier.
+    """
+    differentiator = None
+    """
+    A string used to guarantee unique ids for objects.  A value of None
+    indicates no string is used.  Otherwise, this string will be spliced
+    into the object's id.
+    """
+    differentiatorFieldName = 'differentiator'
+    """
+    The name of the differentiator field in the fields array for CompoundId
+    subclasses.
+    """
+
+    def __init__(self, parentCompoundId, *localIds):
+        """
+        Allocates a new CompoundId for the specified parentCompoundId and
+        local identifiers. This compoundId inherits all of the fields and
+        values from the parent compound ID, and must have localIds
+        corresponding to its fields. If no parent id is present,
+        parentCompoundId should be set to None.
+        """
+        index = 0
+        if parentCompoundId is not None:
+            for field in parentCompoundId.fields:
+                setattr(self, field, getattr(parentCompoundId, field))
+                index += 1
+        if (self.differentiator is not None and
+                self.differentiatorFieldName in self.fields[index:]):
+            # insert a differentiator into the localIds if appropriate
+            # for this class and we haven't advanced beyond it already
+            differentiatorIndex = self.fields[index:].index(
+                self.differentiatorFieldName)
+            localIds = localIds[:differentiatorIndex] + tuple([
+                self.differentiator]) + localIds[differentiatorIndex:]
+        for field, localId in zip(self.fields[index:], localIds):
+            if not isinstance(localId, basestring):
+                raise exceptions.BadIdentifierNotStringException(localId)
+            encodedLocalId = self.encode(localId)
+            setattr(self, field, encodedLocalId)
+        if len(localIds) != len(self.fields) - index:
+            raise ValueError(
+                "Incorrect number of fields provided to instantiate ID")
+        for idFieldName, prefix in self.containerIds:
+            values = [getattr(self, f) for f in self.fields[:prefix + 1]]
+            containerId = self.join(values)
+            obfuscated = self.obfuscate(containerId)
+            setattr(self, idFieldName, obfuscated)
+
+    def __str__(self):
+        values = [getattr(self, f) for f in self.fields]
+        compoundIdStr = self.join(values)
+        return self.obfuscate(compoundIdStr)
+
+    @classmethod
+    def join(cls, splits):
+        """
+        Join an array of ids into a compound id string
+        """
+        segments = []
+        for split in splits:
+            segments.append('"{}",'.format(split))
+        if len(segments) > 0:
+            segments[-1] = segments[-1][:-1]
+        jsonString = '[{}]'.format(''.join(segments))
+        return jsonString
+
+    @classmethod
+    def split(cls, jsonString):
+        """
+        Split a compound id string into an array of ids
+        """
+        splits = json.loads(jsonString)
+        return splits
+
+    @classmethod
+    def encode(cls, idString):
+        """
+        Encode a string by escaping problematic characters
+        """
+        return idString.replace('"', '\\"')
+
+    @classmethod
+    def decode(cls, encodedString):
+        """
+        Decode an encoded string
+        """
+        return encodedString.replace('\\"', '"')
+
+    @classmethod
+    def parse(cls, compoundIdStr):
+        """
+        Parses the specified compoundId string and returns an instance
+        of this CompoundId class.
+
+        :raises: An ObjectWithIdNotFoundException if parsing fails. This is
+        because this method is a client-facing method, and if a malformed
+        identifier (under our internal rules) is provided, the response should
+        be that the identifier does not exist.
+        """
+        if not isinstance(compoundIdStr, basestring):
+            raise exceptions.BadIdentifierException(compoundIdStr)
+        try:
+            deobfuscated = cls.deobfuscate(compoundIdStr)
+        except TypeError:
+            # When a string that cannot be converted to base64 is passed
+            # as an argument, b64decode raises a TypeError. We must treat
+            # this as an ID not found error.
+            raise exceptions.ObjectWithIdNotFoundException(compoundIdStr)
+        try:
+            encodedSplits = cls.split(deobfuscated)
+            splits = [cls.decode(split) for split in encodedSplits]
+        except (UnicodeDecodeError, ValueError):
+            # Sometimes base64 decoding succeeds but we're left with
+            # unicode gibberish. This is also and IdNotFound.
+            raise exceptions.ObjectWithIdNotFoundException(compoundIdStr)
+        # pull the differentiator out of the splits before instantiating
+        # the class, if the differentiator exists
+        fieldsLength = len(cls.fields)
+        if cls.differentiator is not None:
+            differentiatorIndex = cls.fields.index(
+                cls.differentiatorFieldName)
+            if differentiatorIndex < len(splits):
+                del splits[differentiatorIndex]
+            else:
+                raise exceptions.ObjectWithIdNotFoundException(
+                    compoundIdStr)
+            fieldsLength -= 1
+        if len(splits) != fieldsLength:
+            raise exceptions.ObjectWithIdNotFoundException(compoundIdStr)
+        return cls(None, *splits)
+
+    @classmethod
+    def obfuscate(cls, idStr):
+        """
+        Mildly obfuscates the specified ID string in an easily reversible
+        fashion. This is not intended for security purposes, but rather to
+        dissuade users from depending on our internal ID structures.
+        """
+        return unicode(base64.urlsafe_b64encode(
+            idStr.encode('utf-8')).replace(b'=', b''))
+
+    @classmethod
+    def deobfuscate(cls, data):
+        """
+        Reverses the obfuscation done by the :meth:`obfuscate` method.
+        If an identifier arrives without correct base64 padding this
+        function will append it to the end.
+        """
+        # the str() call is necessary to convert the unicode string
+        # to an ascii string since the urlsafe_b64decode method
+        # sometimes chokes on unicode strings
+        return base64.urlsafe_b64decode(str((
+            data + b'A=='[(len(data) - 1) % 4:])))
+
+    @classmethod
+    def getInvalidIdString(cls):
+        """
+        Return an id string that is well-formed but probably does not
+        correspond to any existing object; used mostly in testing
+        """
+        return cls.join(['notValid'] * len(cls.fields))
+
+
+class VariantCompoundId(CompoundId):
+    """
+    The compound id for a variant
+    """
+    fields = ['variant_set_id', 'reference_name', 'start', 'md5']
+
+
