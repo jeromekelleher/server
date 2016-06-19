@@ -224,6 +224,7 @@ class HtslibReference(registry.Reference, PysamMixin):
     }
 
     def run_get_bases(self, start, end):
+        self.check_query_range(start, end)
         fasta_file = self.get_file_handle(pysam.FastaFile, self.fasta_url)
         bases = fasta_file.fetch(self.name.encode(), start, end)
         return bases

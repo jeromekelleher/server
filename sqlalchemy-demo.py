@@ -17,7 +17,17 @@ rs1 = htslib.HtslibReferenceSet(
     "NCBI37", "tests/data/referenceSets/NCBI37.fa.gz")
 rs1.ncbi_taxon_id = 9606
 rs1.is_derived = False
+a1 = registry.Accession("an-accession")
+a2 = registry.Accession("an-ccession")
+rs1.references[0].source_accessions.append(a1)
+rs1.references[0].source_accessions.append(a2)
+rs1.source_accessions.append(a1)
+rs1.source_accessions.append(a2)
+
 db.add_reference_set(rs1)
+
+print("REFERE")
+print(rs1.get_protobuf())
 
 for j in range(1):
     rs2 = simulator.SimulatedReferenceSet("simrs_{}".format(j), j)
@@ -77,11 +87,11 @@ for rs in db.get_reference_sets():
 # rgs.reference_set = rs1
 # db.add_read_group_set(rgs)
 
-bam = "tests/data/datasets/dataset1/reads/HG00096.mapped.ILLUMINA.bwa.GBR.low_coverage.20120522.bam"
-rgs = htslib.HtslibReadGroupSet("HG0096", bam, bam + ".bai")
-rgs.dataset = dataset
-rgs.reference_set = rs1
-db.add_read_group_set(rgs)
+# bam = "tests/data/datasets/dataset1/reads/HG00096.mapped.ILLUMINA.bwa.GBR.low_coverage.20120522.bam"
+# rgs = htslib.HtslibReadGroupSet("HG0096", bam, bam + ".bai")
+# rgs.dataset = dataset
+# rgs.reference_set = rs1
+# db.add_read_group_set(rgs)
 
 # bam = "1kg-data/NA12878.mapped.ILLUMINA.bwa.CEU.low_coverage.20121211.bam"
 # rgs = htslib.HtslibReadGroupSet("NA12878", bam, bam + ".bai")

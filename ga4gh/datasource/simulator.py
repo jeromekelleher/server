@@ -16,8 +16,20 @@ import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
 
 
+#####################################################################
+#
+# References
+#
+#####################################################################
+
+
 class SimulatedReferenceSet(registry.ReferenceSet):
+    """
+    A simulated reference set. Generates values for class attributes randomly
+    and creates a given number of SimulatedReference instances.
+    """
     __tablename__ = 'SimulatedReferenceSet'
+
     id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey('ReferenceSet.id'),
         primary_key=True)
@@ -53,7 +65,12 @@ class SimulatedReferenceSet(registry.ReferenceSet):
 
 
 class SimulatedReference(registry.Reference):
+    """
+    A simulated reference. Stores a random sequence of a given length, and
+    generates remaining attributes randomly.
+    """
     __tablename__ = 'SimulatedReference'
+
     id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey('Reference.id'),
         primary_key=True)
@@ -82,6 +99,13 @@ class SimulatedReference(registry.Reference):
 
     def run_get_bases(self, start, end):
         return self.bases[start:end]
+
+
+#####################################################################
+#
+# Variants
+#
+#####################################################################
 
 
 class SimulatedVariantSet(registry.VariantSet):
@@ -181,6 +205,12 @@ class SimulatedVariantSet(registry.VariantSet):
             i += 1
         if i != request.end:
             response_builder.setNextPageToken(str(i))
+
+#####################################################################
+#
+# Reads
+#
+#####################################################################
 
 
 class SimulatedReadGroupSet(registry.ReadGroupSet):

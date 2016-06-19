@@ -41,19 +41,12 @@ def create_timestamp_column():
 SqlAlchemyBase = sqlalchemy.ext.declarative.declarative_base()
 
 
-class Info(SqlAlchemyBase):
-    """
-    A generic key-value table used to store info maps used in various
-    places in the schema.
-    """
-    # TODO complete this. We probably need a more complicated
-    # relationship because we can multiple values per key.
-    __tablename__ = 'Info'
 
-    id = sqlalchemy.Column(
-        sqlalchemy.Integer, primary_key=True, autoincrement=True)
-    key = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
-    value = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+#####################################################################
+#
+# Datasets and tables to represent schema wide objects.
+#
+#####################################################################
 
 
 class Dataset(SqlAlchemyBase):
@@ -75,16 +68,132 @@ class Dataset(SqlAlchemyBase):
         return ret
 
 
+class Info(SqlAlchemyBase):
+    """
+    A generic key-value table used to store info maps used in various
+    places in the schema.
+    """
+    # TODO complete this. We probably need a more complicated
+    # relationship because we can multiple values per key.
+    __tablename__ = 'Info'
+
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, primary_key=True, autoincrement=True)
+    key = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
+    value = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+
+#####################################################################
+#
+# References
+#
+#####################################################################
+
+
+class Accession(SqlAlchemyBase):
+    """
+    Accession idenfiers for sequences.
+    """
+    __tablename__ = "Accession"
+
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, primary_key=True, autoincrement=True)
+
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The accession ID string.
+    """
+
+    def __init__(self, name):
+        self.name = name
+
+    __table_args__ = (
+        # Accession names must be unique.
+        sqlalchemy.UniqueConstraint("name"),
+    )
+
+
+# There is a many-to-many association between References and Accessions,
+# so we need an association table.
+_reference_accessions_table = sqlalchemy.Table(
+    'reference_accession_association', SqlAlchemyBase.metadata,
+    sqlalchemy.Column(
+        'reference_id', sqlalchemy.Integer,
+        sqlalchemy.ForeignKey('Reference.id')),
+    sqlalchemy.Column(
+        'accession_id', sqlalchemy.Integer,
+        sqlalchemy.ForeignKey('Accession.id')))
+
+
 class Reference(SqlAlchemyBase):
+    """
+    A Reference is a canonical assembled contig, intended to act as a
+    reference coordinate space for other genomic annotations. A single
+    Reference might represent the human chromosome 1, for instance.
+    """
+
     __tablename__ = 'Reference'
 
     id = create_id_column()
+
     name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The name of this reference, eg. "22". This must be unique
+    within a ReferenceSet.
+    """
+
     md5checksum = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The MD5 checksum uniquely representing this `Reference` as a
+    lower-case hexadecimal string, calculated as the MD5 of the upper-case
+    sequence excluding all whitespace characters.
+    """
+
     length = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+    """
+    The length of this reference's sequence string.
+    """
+
+    ncbi_taxon_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+    """
+    The NCBI Taxon ID for this reference. This is the
+    ID from http://www.ncbi.nlm.nih.gov/taxonomy (e.g. 9606->human)
+    indicating the species which this reference is intended to model.
+    Note that `Reference`s within a ReferenceSet may specify a different
+    `ncbiTaxonId`, as assemblies may contain reference sequences
+    which do not belong to the modeled species, e.g.  EBV in a
+    human reference genome.
+    """
+
     source_uri = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The URI from which the sequence was obtained. Specifies a FASTA format
+    file/string with one name, sequence pair.
+    """
+
     is_derived = sqlalchemy.Column(sqlalchemy.Boolean, nullable=False)
+    """
+    True if this Reference is derived. A sequence X is said to be
+    derived from source sequence Y, if X and Y are of the same length and
+    the per-base sequence divergence at A/C/G/T bases is sufficiently
+    small. Two sequences derived from the same official sequence share the
+    same coordinates and annotations, and can be replaced with the official
+    sequence for certain use cases.
+    """
+
     source_divergence = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+    """
+    The source divergence reference of a reference is the fraction of non-indel
+    bases that do not match the reference this record was derived from.
+    """
+
+    source_accessions = orm.relationship(
+        "Accession", secondary=_reference_accessions_table)
+    """
+    The list of source accessions for this Reference. These are all known
+    corresponding accession IDs in INSDC (GenBank/ENA/DDBJ) ideally
+    with a version number, e.g. `NC_000001.11`.
+    """
 
     reference_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
@@ -104,9 +213,10 @@ class Reference(SqlAlchemyBase):
 
     def __init__(self, name):
         self.name = name
-        self.source_divergence = 0
         self.source_uri = ""
+        self.ncbi_taxon_id = 0
         self.is_derived = False
+        self.source_divergence = 0
 
     def get_protobuf(self):
         ret = protocol.Reference()
@@ -114,35 +224,101 @@ class Reference(SqlAlchemyBase):
         ret.name = self.name
         ret.md5checksum = self.md5checksum
         ret.length = self.length
-        # We derive the ncbi_taxon_id from the reference set, since it
-        # seems hard to imagine having a reference set containing references
-        # from multiple species.
-        ret.ncbi_taxon_id = self.reference_set.ncbi_taxon_id
-        # ret.source_accessions.extend(self.source_accessions)
+        ret.ncbi_taxon_id = self.ncbi_taxon_id
+        ret.source_accessions.extend(
+            acc.name for acc in self.source_accessions)
         ret.source_divergence = self.source_divergence
         ret.source_uri = self.source_uri
         return ret
 
     def check_query_range(self, start, end):
+        """
+        Checks to ensure that the query range is valid within this reference.
+        If not, raise ReferenceRangeErrorException.
+        """
         condition = (
-            (start < 0 or end > self.length) or
-            start > end or start == end)
+            (start < 0 or end > self.length) or start > end)
         if condition:
             raise exceptions.ReferenceRangeErrorException(self.id, start, end)
 
 
+# There is a many-to-many association between ReferenceSets and Accessions,
+# so we need an association table.
+_reference_set_accessions_table = sqlalchemy.Table(
+    'reference_set_accession_association', SqlAlchemyBase.metadata,
+    sqlalchemy.Column(
+        'reference_set_id', sqlalchemy.Integer,
+        sqlalchemy.ForeignKey('ReferenceSet.id')),
+    sqlalchemy.Column(
+        'accession_id', sqlalchemy.Integer,
+        sqlalchemy.ForeignKey('Accession.id')))
+
+
 class ReferenceSet(SqlAlchemyBase):
+    """
+    A ReferenceSet is a set of References which typically comprise a
+    reference assembly, such as GRCh38.
+    """
     __tablename__ = 'ReferenceSet'
 
     id = create_id_column()
+
     name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
+    """
+    The name of this ReferenceSet. This must be unique within the repository.
+    """
+
     description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    Returns the free text description of this reference set.
+    """
+
     assembly_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    This is the public id of this reference set, such as `GRCh37`
+    """
+
     md5checksum = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The MD5 checksum for this reference set. This checksum is
+    calculated by making a list of `Reference.md5checksum` for all
+    `Reference`s in this set. We then sort this list, and take the
+    MD5 hash of all the strings concatenated together.
+    """
+
     is_derived = sqlalchemy.Column(sqlalchemy.Boolean, nullable=False)
+    """
+    True if this ReferenceSet is derived. A ReferenceSet
+    may be derived from a source if it contains additional sequences,
+    or some of the sequences within it are derived.
+    """
+
     ncbi_taxon_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+    """
+    The NCBI Taxon ID for this reference set. This is the
+    ID from http://www.ncbi.nlm.nih.gov/taxonomy (e.g. 9606->human)
+    indicating the species which this assembly is intended to model.
+    Note that contained `Reference`s may specify a different
+    `ncbiTaxonId`, as assemblies may contain reference sequences
+    which do not belong to the modeled species, e.g.  EBV in a
+    human reference genome.
+    """
+
     source_uri = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-    # TODO source_acessions; should this be another table?
+    """
+    The sourceURI for this ReferenceSet.
+
+    TODO: clarify the purpose and meaning of this field.
+    """
+
+    source_accessions = orm.relationship(
+        "Accession", secondary=_reference_set_accessions_table)
+    """
+    The list of source accessions for this ReferenceSet. These are all known
+    corresponding accession IDs in INSDC (GenBank/ENA/DDBJ) ideally
+    with a version number, e.g. `NC_000001.11`.
+    """
+
     references = orm.relationship(
         "Reference", back_populates="reference_set",
         cascade="all, delete, delete-orphan")
@@ -162,10 +338,8 @@ class ReferenceSet(SqlAlchemyBase):
 
     def _compute_md5checksum(self):
         """
-        Computes the MD5 checksum for this reference set. This checksum is
-        calculated by making a list of `Reference.md5checksum` for all
-        `Reference`s in this set. We then sort this list, and take the
-        MD5 hash of all the strings concatenated together.
+        Computes the MD5 checksum for this reference set. See the
+        documentation for the md5checksum for how this is defined.
         """
         checksums = sorted([ref.md5checksum for ref in self.references])
         self.md5checksum = hashlib.md5("".join(checksums)).hexdigest()
@@ -179,9 +353,16 @@ class ReferenceSet(SqlAlchemyBase):
         ret.is_derived = self.is_derived
         ret.md5checksum = self.md5checksum
         ret.ncbi_taxon_id = self.ncbi_taxon_id
-        # ret.source_accessions.extend(self.getSourceAccessions())
+        ret.source_accessions.extend(
+            acc.name for acc in self.source_accessions)
         ret.source_uri = self.source_uri
         return ret
+
+#####################################################################
+#
+# Variants
+#
+#####################################################################
 
 
 class VariantSetMetadata(SqlAlchemyBase):
@@ -218,7 +399,7 @@ class VariantSetMetadata(SqlAlchemyBase):
 
 # There is a many-to-many association between VariantSets and CallSets,
 # so we need an association table.
-call_set_association_table = sqlalchemy.Table(
+_call_set_association_table = sqlalchemy.Table(
     'call_set_association', SqlAlchemyBase.metadata,
     sqlalchemy.Column(
         'variant_set_id', sqlalchemy.Integer,
@@ -237,7 +418,7 @@ class CallSet(SqlAlchemyBase):
     creation_timestamp = create_timestamp_column()
     update_timestamp = create_timestamp_column()
     variant_sets = orm.relationship(
-        "VariantSet", secondary=call_set_association_table,
+        "VariantSet", secondary=_call_set_association_table,
         back_populates="call_sets")
 
     def get_protobuf(self):
@@ -283,7 +464,7 @@ class VariantSet(SqlAlchemyBase):
     variant_set_metadata = orm.relationship(
         "VariantSetMetadata", cascade="all, delete, delete-orphan")
     call_sets = orm.relationship(
-        "CallSet", secondary=call_set_association_table,
+        "CallSet", secondary=_call_set_association_table,
         back_populates="variant_sets", lazy="dynamic")
 
     type = sqlalchemy.Column(sqlalchemy.String)
@@ -308,6 +489,13 @@ class VariantSet(SqlAlchemyBase):
         metadata = [m.get_protobuf() for m in self.variant_set_metadata]
         ret.metadata.extend(metadata)
         return ret
+
+
+#####################################################################
+#
+# Reads
+#
+#####################################################################
 
 
 class ReadStats(SqlAlchemyBase):
