@@ -25,7 +25,7 @@ import requests
 import ga4gh
 import ga4gh.backend as backend
 import ga4gh.client as client
-import ga4gh.converters as converters
+# import ga4gh.converters as converters
 import ga4gh.frontend as frontend
 import ga4gh.configtest as configtest
 import ga4gh.exceptions as exceptions

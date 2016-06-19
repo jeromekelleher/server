@@ -586,7 +586,8 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
         if 'RG' not in header or len(header['RG']) == 0:
             # If there is no read group header information, we assume there
             # is a single read group in the file, and give the default name
-            read_group = registry.ReadGroup(DEFAULT_READGROUP_NAME)
+            read_group = registry.ReadGroup(
+                name=DEFAULT_READGROUP_NAME, sample_id="")
             self.read_groups.append(read_group)
         else:
             for rg_header in header['RG']:

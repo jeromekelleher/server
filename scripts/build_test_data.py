@@ -20,7 +20,7 @@ def run(*args):
 
 def main(args):
     prefix = args.data_directory
-    repoFile = os.path.join(prefix, "repo.db")
+    repoFile = "sqlite:///" + os.path.join(prefix, "repo.db")
     sequenceOntologyName = "so-xp-simple"
     useRelativePath = '-r' if args.relativePaths else ''
     run("init", "-f", repoFile)
@@ -29,9 +29,10 @@ def main(args):
     for dataFile in glob.glob(pattern):
         run("add-referenceset", repoFile, useRelativePath, dataFile)
 
-    pattern = os.path.join(prefix, "ontologies", "*.obo")
-    for dataFile in glob.glob(pattern):
-        run("add-ontology", repoFile, useRelativePath, dataFile)
+    # FIXME
+    # pattern = os.path.join(prefix, "ontologies", "*.obo")
+    # for dataFile in glob.glob(pattern):
+    #     run("add-ontology", repoFile, useRelativePath, dataFile)
 
     datasetName = "dataset1"
     run("add-dataset", repoFile, datasetName)
@@ -39,7 +40,7 @@ def main(args):
     pattern = os.path.join(prefix, "datasets/dataset1/reads", "*.bam")
     for dataFile in glob.glob(pattern):
         run("add-readgroupset", repoFile, datasetName, useRelativePath,
-            dataFile)
+            dataFile, "-R NCBI37")
 
     pattern = os.path.join(prefix, "datasets/dataset1/variants", "*")
     for j, dataFile in enumerate(glob.glob(pattern)):
@@ -48,12 +49,13 @@ def main(args):
             "add-variantset", repoFile, datasetName, useRelativePath,
             dataFile, "-R NCBI37", "-n ", name, "-aO", sequenceOntologyName)
 
-    pattern = os.path.join(
-        prefix, "datasets/dataset1/sequenceAnnotations", "*.db")
-    for j, dataFile in enumerate(glob.glob(pattern)):
-        run(
-            "add-featureset", repoFile, datasetName, useRelativePath,
-            dataFile, "-R NCBI37", "-O", sequenceOntologyName)
+    # FIXME
+    # pattern = os.path.join(
+    #     prefix, "datasets/dataset1/sequenceAnnotations", "*.db")
+    # for j, dataFile in enumerate(glob.glob(pattern)):
+    #     run(
+    #         "add-featureset", repoFile, datasetName, useRelativePath,
+    #         dataFile, "-R NCBI37", "-O", sequenceOntologyName)
 
 
 def parseArgs():

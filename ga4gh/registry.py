@@ -616,7 +616,7 @@ class ReadGroup(SqlAlchemyBase):
         "ReadStats",  cascade="all, delete, delete-orphan", single_parent=True)
     experiment_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("Experiment.id"),
-        nullable=False)
+        nullable=True)
     experiment = orm.relationship(
         "Experiment",  cascade="all, delete, delete-orphan",
         single_parent=True)
@@ -656,7 +656,8 @@ class ReadGroup(SqlAlchemyBase):
         self.read_stats.update_protobuf(ret.stats)
         ret.programs.extend(
             p.get_protobuf() for p in self.read_group_set.programs)
-        self.experiment.update_protobuf(ret.experiment)
+        if self.experiment is not None:
+            self.experiment.update_protobuf(ret.experiment)
         return ret
 
 
