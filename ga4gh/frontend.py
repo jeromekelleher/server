@@ -134,46 +134,52 @@ class ServerStatus(object):
         """
         Returns the list of datasetIds for this backend
         """
-        return app.backend.getDataRepository().getDatasets()
+        # return app.backend.getDataRepository().getDatasets()
+        return []
 
     def getVariantSets(self, datasetId):
         """
         Returns the list of variant sets for the dataset
         """
-        return app.backend.getDataRepository().getDataset(
-            datasetId).getVariantSets()
+        return []
+        # return app.backend.getDataRepository().getDataset(
+        #     datasetId).getVariantSets()
 
     def getFeatureSets(self, datasetId):
         """
         Returns the list of feature sets for the dataset
         """
-        return app.backend.getDataRepository().getDataset(
-            datasetId).getFeatureSets()
+        return []
+        # return app.backend.getDataRepository().getDataset(
+        #     datasetId).getFeatureSets()
 
     def getReadGroupSets(self, datasetId):
         """
         Returns the list of ReadGroupSets for the dataset
         """
-        return app.backend.getDataRepository().getDataset(
-            datasetId).getReadGroupSets()
+        return []
+        # return app.backend.getDataRepository().getDataset(
+        #     datasetId).getReadGroupSets()
 
     def getReferenceSets(self):
         """
         Returns the list of ReferenceSets for this server.
         """
-        return app.backend.getDataRepository().getReferenceSets()
+        return []
+        # return app.backend.getDataRepository().getReferenceSets()
 
     def getVariantAnnotationSets(self, datasetId):
         """
         Returns the list of ReferenceSets for this server.
         """
         # TODO this should be displayed per-variant set, not per dataset.
-        variantAnnotationSets = []
-        dataset = app.backend.getDataRepository().getDataset(datasetId)
-        for variantSet in dataset.getVariantSets():
-            variantAnnotationSets.extend(
-                variantSet.getVariantAnnotationSets())
-        return variantAnnotationSets
+        # variantAnnotationSets = []
+        # dataset = app.backend.getDataRepository().getDataset(datasetId)
+        # for variantSet in dataset.getVariantSets():
+        #     variantAnnotationSets.extend(
+        #         variantSet.getVariantAnnotationSets())
+        # return variantAnnotationSets
+        return []
 
 
 def reset():
