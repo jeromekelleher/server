@@ -1787,14 +1787,14 @@ class RepoManager(object):
             name = getNameFromPath(self._args.filePath)
         reference_set = htslib.HtslibReferenceSet(name, file_path)
         reference_set.description = self._args.description
-        reference_set.ncbi_taxon_id = self._args.ncbi_taxon_id
-        reference_set.is_derived = self._args.is_derived
-        reference_set.assembly_id = self._args.assembly_id
+        reference_set.ncbi_taxon_id = self._args.ncbiTaxonId
+        reference_set.is_derived = self._args.isDerived
+        reference_set.assembly_id = self._args.assemblyId
         # sourceAccessions = []
         # if self._args.sourceAccessions is not None:
         #     sourceAccessions = self._args.sourceAccessions.split(",")
         # referenceSet.setSourceAccessions(sourceAccessions)
-        reference_set.source_uri = self._args.source_uri
+        reference_set.source_uri = self._args.sourceUri
         self._registry.add_reference_set(reference_set)
 
     def addReadGroupSet(self):
@@ -2221,18 +2221,18 @@ class RepoManager(object):
         cls.addNameOption(addReferenceSetParser, objectType)
         cls.addDescriptionOption(addReferenceSetParser, objectType)
         addReferenceSetParser.add_argument(
-            "--ncbi_taxon_id", type=int, default=0, help="The NCBI Taxon Id")
+            "--ncbiTaxonId", type=int, default=0, help="The NCBI Taxon Id")
         addReferenceSetParser.add_argument(
-            "--is_derived", default=False, type=bool,
+            "--isDerived", default=False, type=bool,
             help="Indicates if this reference set is derived from another")
         addReferenceSetParser.add_argument(
-            "--assembly_id", default="",
+            "--assemblyId", default="",
             help="The assembly id")
         addReferenceSetParser.add_argument(
-            "--source_accessions", default=None,
+            "--sourceAccessions", default=None,
             help="The source accessions (pass as comma-separated list)")
         addReferenceSetParser.add_argument(
-            "--source_uri", default="",
+            "--sourceUri", default="",
             help="The source URI")
 
         removeReferenceSetParser = addSubparser(
