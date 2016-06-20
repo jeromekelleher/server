@@ -805,6 +805,13 @@ class RegistryDb(object):
 
     # Top level API to add objects to the data repository.
 
+    def remove(self, obj):
+        """
+        Removes the specified object from the database.
+        """
+        self._session.delete(obj)
+        self._session.commit()
+
     def _is_unique_name_violation(self, integrity_error):
         """
         Returns True if the specified exception corresponds to a

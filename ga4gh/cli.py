@@ -1922,48 +1922,47 @@ class RepoManager(object):
         Removes a referenceSet from the repo.
         """
         self._openRepo()
-        referenceSet = self._registry.getReferenceSetByName(
+        referenceSet = self._registry.get_reference_set_by_name(
             self._args.referenceSetName)
 
         def func():
-            self._updateRepo(self._registry.removeReferenceSet, referenceSet)
-        self._confirmDelete("ReferenceSet", referenceSet.getLocalId(), func)
+            self._registry.remove(referenceSet)
+        self._confirmDelete("ReferenceSet", referenceSet.name, func)
 
     def removeReadGroupSet(self):
         """
         Removes a readGroupSet from the repo.
         """
         self._openRepo()
-        dataset = self._registry.getDatasetByName(self._args.datasetName)
-        readGroupSet = dataset.getReadGroupSetByName(
-            self._args.readGroupSetName)
+        readGroupSet = self._registry.get_read_group_set_by_name(
+            self._args.datasetName, self._args.readGroupSetName)
 
         def func():
-            self._updateRepo(self._registry.removeReadGroupSet, readGroupSet)
-        self._confirmDelete("ReadGroupSet", readGroupSet.getLocalId(), func)
+            self._registry.remove(readGroupSet)
+        self._confirmDelete("ReadGroupSet", readGroupSet.name, func)
 
     def removeVariantSet(self):
         """
         Removes a variantSet from the repo.
         """
         self._openRepo()
-        dataset = self._registry.getDatasetByName(self._args.datasetName)
-        variantSet = dataset.getVariantSetByName(self._args.variantSetName)
+        variantSet = self._registry.get_variant_set_by_name(
+                self._args.datasetName, self._args.variantSetName)
 
         def func():
-            self._updateRepo(self._registry.removeVariantSet, variantSet)
-        self._confirmDelete("VariantSet", variantSet.getLocalId(), func)
+            self._registry.remove(variantSet)
+        self._confirmDelete("VariantSet", variantSet.name, func)
 
     def removeDataset(self):
         """
         Removes a dataset from the repo.
         """
         self._openRepo()
-        dataset = self._registry.getDatasetByName(self._args.datasetName)
+        dataset = self._registry.get_dataset_by_name(self._args.datasetName)
 
         def func():
-            self._updateRepo(self._registry.removeDataset, dataset)
-        self._confirmDelete("Dataset", dataset.getLocalId(), func)
+            self._registry.remove(dataset)
+        self._confirmDelete("Dataset", dataset.name, func)
 
     def addFeatureSet(self):
         """
