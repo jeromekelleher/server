@@ -11,6 +11,7 @@ import os
 testDir = 'tests'
 testDataDir = os.path.join(testDir, 'data')
 testDataRepo = os.path.join(testDataDir, 'repo.db')
+testDataRepoUrl = "sqlite:///" + testDataRepo
 
 # references
 referenceSetName = 'chr17'

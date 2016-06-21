@@ -12,30 +12,37 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import unittest
+
 import server_test
 import client
 
-import ga4gh.datarepo as datarepo
+import ga4gh.registry as registry
 
 
 class TestGestalt(server_test.ServerTest):
     """
     An end-to-end test of the client and server
     """
+    @unittest.skip("FIXME VA")
     def testEndToEnd(self):
-        # extract ids from a simulated data repo with the same config
-        repo = datarepo.SimulatedDataRepository()
-        dataset = repo.getDatasets()[0]
-        datasetId = dataset.getId()
-        variantSet = dataset.getVariantSets()[0]
-        variantSetId = variantSet.getId()
-        readGroupSet = dataset.getReadGroupSets()[0]
-        readGroupId = readGroupSet.getReadGroups()[0].getId()
-        referenceSet = repo.getReferenceSets()[0]
-        referenceSetId = referenceSet.getId()
-        referenceId = referenceSet.getReferences()[0].getId()
-        variantAnnotationSetId = \
-            variantSet.getVariantAnnotationSets()[0].getId()
+        # TODO this should be broken in to several test methods, with the
+        # expensive setup done using setUpClass
+        db_url = self.server.getDbUrl()
+        registry_db = registry.RegistryDb(db_url)
+        registry_db.open()
+
+        dataset = registry_db.get_datasets()[0]
+        datasetId = str(dataset.id)
+        variantSet = dataset.variant_sets[0]
+        variantSetId = str(variantSet.id)
+        readGroupSet = dataset.read_group_sets[0]
+        readGroupId = str(readGroupSet.read_groups[0].id)
+        referenceSet = registry_db.get_reference_sets()[0]
+        referenceSetId = str(referenceSet.id)
+        referenceId = str(referenceSet.references[0].id)
+        # variantAnnotationSetId = \
+        #     variantSet.getVariantAnnotationSets()[0].getId()
 
         self.simulatedDatasetId = datasetId
         self.simulatedVariantSetId = variantSetId
@@ -113,7 +120,7 @@ class TestGestalt(server_test.ServerTest):
             "{}".format(self.simulatedVariantAnnotationSetId))
 
     def runReadsRequest(self):
-        args = "--readGroupIds {} --referenceId {}".format(
+        args = "--readGroupIds {} --referenceId {} --end 10".format(
             self.simulatedReadGroupId, self.simulatedReferenceId)
         self.runClientCmd(self.client, "reads-search", args)
 

@@ -29,8 +29,7 @@ class TestClientOutput(unittest.TestCase):
     """
     def setUp(self):
         self._maxDiff = None
-        repoPath = paths.testDataRepo
-        self._dataUrl = "sqlite:///{}".format(repoPath)
+        self._dataUrl = paths.testDataRepoUrl
         registry_db = registry.RegistryDb(self._dataUrl)
         registry_db.open()
         self._backend = backend.Backend(registry_db)

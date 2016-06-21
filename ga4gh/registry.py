@@ -406,6 +406,7 @@ class VariantSetMetadata(SqlAlchemyBase):
         ret.description = self.description
         return ret
 
+
 # There is a many-to-many association between VariantSets and CallSets,
 # so we need an association table.
 _call_set_association_table = sqlalchemy.Table(
@@ -498,6 +499,14 @@ class VariantSet(SqlAlchemyBase):
         metadata = [m.get_protobuf() for m in self.variant_set_metadata]
         ret.metadata.extend(metadata)
         return ret
+
+    def get_variants(self, reference_name, start=0, end=None):
+        """
+        Convenience method for testing. Returns an iterator over the
+        variants in the specified region. If end is not specified
+        all variants from start are returned.
+        """
+        raise NotImplementedError()
 
 
 #####################################################################
@@ -764,13 +773,6 @@ class RegistryDb(object):
         Session = orm.sessionmaker()
         Session.configure(bind=self._engine)
         self._session = Session()
-
-    def commit(self):
-        """
-        Commits any changes made to the repo. It is an error to call
-        this function if the repo is not opened in write-mode.
-        """
-        self._session.commit()
 
     def close(self):
         """

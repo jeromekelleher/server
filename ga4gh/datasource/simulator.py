@@ -206,6 +206,17 @@ class SimulatedVariantSet(registry.VariantSet):
         if i != request.end:
             response_builder.setNextPageToken(str(i))
 
+    def get_variants(self, reference_name, start=0, end=None, call_sets=[]):
+        """
+        Returns an iterator over the variants in the specified region.
+        """
+        the_end = end
+        if end is None:
+            the_end = 2**32
+        for i in range(start, end):
+            yield self.generate_variant(reference_name, call_sets, i)
+
+
 #####################################################################
 #
 # Reads

@@ -6,9 +6,12 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import unittest
+import tempfile
+import os
 import logging
 
 import tests.paths as paths
+import tests.utils as utils
 
 import ga4gh.datamodel as datamodel
 import ga4gh.frontend as frontend
@@ -23,12 +26,15 @@ class TestFrontend(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        fd, cls.db_file = tempfile.mkstemp(prefix="ga4gh_test_views")
+        os.close(fd)
+        db_url = "sqlite:///" + cls.db_file
+        registry_db = utils.create_simulated_registry_db(
+            db_url=db_url, random_seed=1, num_datasets=1,
+            num_variant_sets=1, num_calls=1)
+        registry_db.close()
         config = {
-            "DATA_SOURCE": "simulated://",
-            "SIMULATED_BACKEND_RANDOM_SEED": 1111,
-            "SIMULATED_BACKEND_NUM_CALLS": 1,
-            "SIMULATED_BACKEND_VARIANT_DENSITY": 1.0,
-            "SIMULATED_BACKEND_NUM_VARIANT_SETS": 1,
+            "DATA_SOURCE": db_url,
             "LANDING_MESSAGE_HTML": paths.landingMessageHtml
             # "DEBUG" : True
         }
@@ -40,26 +46,26 @@ class TestFrontend(unittest.TestCase):
         logging.getLogger('ga4gh.frontend.cors').setLevel(logging.CRITICAL)
 
         # example test values
-        cls.backend = frontend.app.backend
-        cls.dataRepo = cls.backend.getDataRepository()
-        cls.referenceSet = cls.dataRepo.getReferenceSets()[0]
-        cls.referenceSetId = cls.referenceSet.getId()
-        cls.reference = cls.referenceSet.getReferences()[0]
-        cls.referenceId = cls.reference.getId()
-        cls.dataset = cls.backend.getDataRepository().getDatasets()[0]
-        cls.datasetId = cls.dataset.getId()
-        cls.variantSet = cls.dataset.getVariantSets()[0]
-        cls.variantSetId = cls.variantSet.getId()
-        gaVariant = cls.variantSet.getVariants("1", 0, 2**32).next()
-        cls.variantId = gaVariant.id
-        cls.callSet = cls.variantSet.getCallSets()[0]
-        cls.callSetId = cls.callSet.getId()
-        cls.readGroupSet = cls.dataset.getReadGroupSets()[0]
-        cls.readGroupSetId = cls.readGroupSet.getId()
-        cls.readGroup = cls.readGroupSet.getReadGroups()[0]
-        cls.readGroupId = cls.readGroup.getId()
-        cls.readAlignment = cls.readGroup.getReadAlignments().next()
-        cls.readAlignmentId = cls.readAlignment.id
+        registry_db = frontend.app.backend.get_registry_db()
+        referenceSet = registry_db.get_reference_sets()[0]
+        reference = referenceSet.references[0]
+        dataset = registry_db.get_datasets()[0]
+        variantSet = dataset.variant_sets[0]
+        variant = next(variantSet.get_variants("1", 0, 10))
+        readGroupSet = dataset.read_group_sets[0]
+
+        cls.referenceSetId = str(referenceSet.id)
+        cls.referenceId = str(reference.id)
+        cls.datasetId = str(dataset.id)
+        cls.variantSetId = str(variantSet.id)
+        cls.callSetId = str(variantSet.call_sets[0].id)
+        cls.readGroupSetId = str(readGroupSet.id)
+        cls.readGroupId = str(readGroupSet.read_groups[0].id)
+        cls.variantId = variant.id
+
+    @classmethod
+    def tearDownClass(cls):
+        os.unlink(cls.db_file)
 
     def sendPostRequest(self, path, request):
         """
@@ -105,10 +111,11 @@ class TestFrontend(unittest.TestCase):
         request.variant_set_id = variantSets[0].id
         return self.sendPostRequest('/callsets/search', request)
 
-    def sendReadsSearch(self, readGroupIds=None, referenceId=""):
+    def sendReadsSearch(self, readGroupIds=None, referenceId="", end=2):
         request = protocol.SearchReadsRequest()
         request.read_group_ids.extend(readGroupIds)
         request.reference_id = referenceId
+        request.end = end
         return self.sendPostRequest('/reads/search', request)
 
     def sendDatasetsSearch(self):
@@ -336,23 +343,21 @@ class TestFrontend(unittest.TestCase):
         response = self.sendGetReadGroupSet()
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(response.data, protocol.ReadGroupSet)
-        self.assertEqual(
-            responseData.id, self.readGroupSetId)
+        self.assertEqual(responseData.id, self.readGroupSetId)
 
     def testGetReadGroup(self):
         response = self.sendGetReadGroup()
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(response.data, protocol.ReadGroup)
-        self.assertEqual(
-            responseData.id, self.readGroupId)
+        self.assertEqual(responseData.id, self.readGroupId)
 
     def testGetCallSet(self):
         response = self.sendGetCallSet()
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(response.data, protocol.CallSet)
-        self.assertEqual(
-            responseData.id, self.callSetId)
+        self.assertEqual(responseData.id, self.callSetId)
 
+    @unittest.skip("FIXME compound ids for simulated variant set.")
     def testGetVariant(self):
         response = self.sendGetVariant()
         self.assertEqual(200, response.status_code)
@@ -365,15 +370,13 @@ class TestFrontend(unittest.TestCase):
         self.assertEqual(len(responseData.call_sets), 1)
 
     def testReadsSearch(self):
-        response = self.sendReadsSearch(readGroupIds=[self.readGroupId],
-                                        referenceId=self.referenceId)
+        response = self.sendReadsSearch(
+            readGroupIds=[self.readGroupId], referenceId=self.referenceId,
+            end=2)
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(
             response.data, protocol.SearchReadsResponse)
         self.assertEqual(len(responseData.alignments), 2)
-        self.assertEqual(
-            responseData.alignments[0].id,
-            self.readAlignmentId)
 
     def testDatasetsSearch(self):
         response = self.sendDatasetsSearch()
@@ -390,9 +393,3 @@ class TestFrontend(unittest.TestCase):
         response = self.sendReadsSearch(readGroupIds=[self.readGroupId],
                                         referenceId="")
         self.assertEqual(501, response.status_code)
-
-    def testSearchReadsMultipleReadGroupSetsSetMismatch(self):
-        response = self.sendReadsSearch(
-            readGroupIds=[self.readGroupId, "42"],
-            referenceId=self.referenceId)
-        self.assertEqual(400, response.status_code)
