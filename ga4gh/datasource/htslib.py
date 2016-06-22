@@ -253,6 +253,18 @@ class HtslibReferenceSet(registry.ReferenceSet):
         # Now that we have all the references, set the md5checksum
         self._compute_md5checksum()
 
+##################################################
+#
+# Variants
+#
+##################################################
+
+
+class HtslibVariantCompoundId(registry.VariantCompoundId):
+    # TODO Implement this and document when we're fixing the CompoundId
+    # system.
+    pass
+
 
 class VcfFile(registry.SqlAlchemyBase):
     __tablename__ = 'VcfFile'
@@ -501,6 +513,31 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
             elif record.start > start:
                 raise exceptions.ObjectNotFoundException()
         raise exceptions.ObjectNotFoundException(compound_id)
+
+    def get_variants(self, reference_name, start, end, call_set_ids=[]):
+        """
+        Convenience method for testing. Returns an iterator over the
+        specified set of variants.
+
+        TODO remove this method once the corresponding data driven testing
+        code has been refactored to use the main server pathway and local
+        client interface.
+        """
+        # Get the list of call sets. This algorithm is inefficient, but it
+        # doesn't matter as this method is only used in testing.
+        call_sets = []
+        for call_set in self.call_sets:
+            if str(call_set.id) in call_set_ids:
+                call_sets.append(call_set)
+        vcf_file = self.vcf_files.filter(
+            VcfFile.reference_name == reference_name).first()
+        if vcf_file is not None:
+            var_file = self.get_file_handle(
+                pysam.VariantFile, vcf_file.data_url,
+                index_filename=vcf_file.index_url)
+            cursor = var_file.fetch(reference_name.encode(), start, end)
+            for record in cursor:
+                yield self.convert_variant(record, call_sets)
 
 
 ##################################################

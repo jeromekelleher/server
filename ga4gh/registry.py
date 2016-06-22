@@ -884,7 +884,7 @@ class RegistryDb(object):
         with the specified name.
         """
         result = self._session.query(VariantSet).filter(
-            Dataset.name == dataset_name and VariantSet.name == name).first()
+            Dataset.name == dataset_name, VariantSet.name == name).first()
         if result is None:
             raise exceptions.VariantSetNameNotFoundException(name)
         return result
@@ -895,7 +895,7 @@ class RegistryDb(object):
         with the specified name.
         """
         result = self._session.query(ReadGroupSet).filter(
-            Dataset.name == dataset_name and ReadGroupSet.name == name).first()
+            Dataset.name == dataset_name, ReadGroupSet.name == name).first()
         if result is None:
             raise exceptions.ReadGroupSetNameNotFoundException(name)
         return result
@@ -986,6 +986,10 @@ class RegistryDb(object):
 
     def get_datasets(self):
         return self._session.query(Dataset).all()
+
+    def get_variant_sets(self):
+        return self._session.query(VariantSet).all()
+
 
     # Getters to provide queries corresponding to the external search requests.
 

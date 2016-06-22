@@ -48,10 +48,9 @@ def main(args):
 
     pattern = os.path.join(prefix, "datasets/dataset1/variants", "*")
     for j, dataFile in enumerate(glob.glob(pattern)):
-        name = "vs_{}".format(j)
         run(
             "add-variantset", repoFile, datasetName, useRelativePath,
-            dataFile, "-R NCBI37", "-n ", name, "-aO", sequenceOntologyName)
+            dataFile, "-R NCBI37", "-aO", sequenceOntologyName)
 
     # FIXME
     # pattern = os.path.join(
