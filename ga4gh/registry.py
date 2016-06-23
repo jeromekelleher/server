@@ -545,13 +545,21 @@ class Program(SqlAlchemyBase):
     version = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     command_line = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     prev_program_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    index = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+    """
+    The position of this program within a given chain. Used to sort
+    programs to ensure they are returned in the most useful order.
+    """
     read_group_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReadGroupSet.id"),
         nullable=False)
 
     def __init__(
-            self, name="", version="", command_line="", prev_program_id=""):
+            self, name="", version="", command_line="", prev_program_id="",
+            index=None):
         self.name = name
+        self.index = index
         self.version = version
         self.command_line = command_line
         self.prev_program_id = prev_program_id
@@ -703,7 +711,8 @@ class ReadGroupSet(SqlAlchemyBase):
     # For simplicity we associate the programs with the ReadGroupSet rather
     # than the read group, as the protocol does.
     programs = orm.relationship(
-        "Program",  cascade="all, delete, delete-orphan", single_parent=True)
+        "Program",  cascade="all, delete, delete-orphan",
+        single_parent=True, order_by="Program.index")
     read_groups = orm.relationship(
         "ReadGroup", back_populates="read_group_set",
         cascade="all, delete, delete-orphan")
@@ -1267,6 +1276,6 @@ class VariantCompoundId(CompoundId):
 
 class ReadAlignmentCompoundId(CompoundId):
     """
-    The compound id for a variant
+    The compound id for a read.
     """
-    fields = ['read_group_id', 'reference_id', 'position', 'fragment_name']
+    fields = ['read_group_id', 'query_name']

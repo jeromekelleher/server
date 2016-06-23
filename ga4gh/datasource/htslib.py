@@ -547,6 +547,12 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
 ##################################################
 
 
+class HtslibReadAlignmentCompoundId(registry.ReadAlignmentCompoundId):
+    # TODO Implement this and document when we're fixing the CompoundId
+    # system.
+    pass
+
+
 class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
 
     __tablename__ = 'HtslibReadGroupSet'
@@ -621,6 +627,16 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             # an index file... may also happen in other cases?
             raise exceptions.DataException(exception.message)
 
+    def __update_read_group_stats(self, read_group):
+        """
+        Sets the read group stats field for the specified read group.
+        """
+        # Set the read group stats to -1 as we can't determine them from the
+        # BAM file.
+        read_group.read_stats.aligned_read_count = -1
+        read_group.read_stats.unaligned_read_count = -1
+        read_group.read_stats.base_count = -1
+
     def __create_read_group(self, rg_header):
         """
         Returns a new read group for the specified SAM RG rg_header.
@@ -637,6 +653,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             platform_unit=rg_header.get('PU', ""),
             run_time=rg_header.get('DT', "")
         )
+        self.__update_read_group_stats(read_group)
         return read_group
 
     def __read_alignment_file(self, alignment_file):
@@ -652,27 +669,32 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             read_group = registry.ReadGroup(
                 name=DEFAULT_READGROUP_NAME, sample_id="")
             self.read_groups.append(read_group)
+            self.__update_read_group_stats(read_group)
         else:
             for rg_header in header['RG']:
                 self.read_groups.append(self.__create_read_group(rg_header))
         # Create the Programs for this ReadGroupSet.
         if 'PG' in header:
-            for htslib_program in header['PG']:
-                program = registry.Program()
-                program.command_line = htslib_program.get('CL', "")
-                program.name = htslib_program.get('PN', "")
+            for index, htslib_program in enumerate(header['PG']):
+                program = registry.Program(
+                    command_line=htslib_program.get('CL', ""),
+                    name=htslib_program.get('PN', ""),
+                    version=htslib_program.get('VN', ""),
+                    index=index
+                )
                 # TODO when we can get the PP values from the header, make a
                 # map # from the SAM IDs to our external IDs and map this
                 # to previous program ID.
                 # htslib_id = htslibProgram['ID']
                 # htslib_prev_if  = htslibProgram.get('PP', "")
-                program.version = htslib_program.get('VN', "")
                 self.programs.append(program)
         # Get the read stats. We cannot currently get the total number
-        # of bases, as pysam does not provide it.
+        # of bases, as pysam does not provide it. We therefore set it
+        # to -1 to avoid confusion with 0.
         self.read_stats = registry.ReadStats(
             aligned_read_count=alignment_file.mapped,
-            unaligned_read_count=alignment_file.unmapped)
+            unaligned_read_count=alignment_file.unmapped,
+            base_count=-1)
         # Get the reference information from the header.
         self.assembly_identifier = None
         for sq_header in header['SQ']:
@@ -759,9 +781,8 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             read.flag, SamFlags.SUPPLEMENTARY_ALIGNMENT)
         # TODO is this really a unique ID for this particular read? Should we
         # not hash something as well to be certain?
-        compound_id = registry.ReadAlignmentCompoundId(
-            None, ret.read_group_id, str(reference.id),
-            str(ret.alignment.position.position), ret.fragment_name)
+        compound_id = HtslibReadAlignmentCompoundId(
+            None, ret.read_group_id, read.query_name)
         ret.id = str(compound_id)
         return ret
 
@@ -793,6 +814,18 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
         if response_builder.isFull() and not is_empty_iter(read_alignments):
             response_builder.setNextPageToken(ga_alignment.id)
 
+    def get_read_alignments(self, reference, read_groups, start=0, end=None):
+        if end is None:
+            end = PysamMixin.samMaxEnd
+        read_group_ids = [str(read_group.id) for read_group in read_groups]
+        alignment_file = self.__open_file(self.data_url, self.index_url)
+        reference_name = reference.name.encode()
+        read_alignments = alignment_file.fetch(reference_name, start, end)
+        for alignment in read_alignments:
+            ga_alignment = self.convertReadAlignment(
+                alignment_file, alignment, reference)
+            if ga_alignment.read_group_id in read_group_ids:
+                yield ga_alignment
 
 class PysamFileHandleCache(object):
     """
