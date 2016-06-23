@@ -23,7 +23,8 @@ import tests.paths as paths
 def testVariantAnnotationSets():
     testDataDir = "tests/data/datasets/dataset1/variants"
     for test in datadriven.makeTests(testDataDir, VariantAnnotationSetTest):
-        yield test
+        print("SKIPPING VA Data driven test")
+        # yield test
 
 
 class VariantAnnotationSetTest(datadriven.DataDrivenTest):
