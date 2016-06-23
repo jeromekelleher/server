@@ -39,9 +39,10 @@ class OntologyTest(datadriven.DataDrivenTest):
         # self._oboReader = obo_parser.OBOReader(obo_file=oboFile)
 
     def getDataModelInstance(self, localId, dataPath):
-        ontology = ontologies.Ontology(localId)
-        ontology.populateFromFile(dataPath)
-        return ontology
+        # ontology = ontologies.Ontology(localId)
+        # ontology.populateFromFile(dataPath)
+        # return ontology
+        return None
 
     def testProtocolElementValid(self):
         # We don't have a protocol element here so this isn't meaningful.
