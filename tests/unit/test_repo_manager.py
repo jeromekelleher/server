@@ -57,7 +57,6 @@ class AbstractRepoManagerTest(unittest.TestCase):
     """
     def setUp(self):
         fd, path = tempfile.mkstemp(prefix="ga4gh_repoman_test")
-        os.unlink(path)
         self._repoPath = "sqlite:///" + path
         self._repoFile = path
 
@@ -426,7 +425,7 @@ class TestRemoveReferenceSet(AbstractRepoManagerTest):
         self.assertReferenceSetRemoved()
 
 
-@unittest.skip("FIXME ontologies ")
+@unittest.skip("FIXME Features")
 class TestVerify(AbstractRepoManagerTest):
 
     def setUp(self):
@@ -444,7 +443,6 @@ class TestVerify(AbstractRepoManagerTest):
         self.runCommand(cmd)
 
 
-@unittest.skip("FIXME ontologies ")
 class TestRemoveOntology(AbstractRepoManagerTest):
 
     def setUp(self):
@@ -456,7 +454,7 @@ class TestRemoveOntology(AbstractRepoManagerTest):
         repo = self.readRepo()
         self.assertRaises(
             exceptions.OntologyNameNotFoundException,
-            repo.getOntologyByName, self._ontologyName)
+            repo.get_ontology_by_name, self._ontologyName)
 
     def testDefaults(self):
         self.runCommand("remove-ontology {} {} -f".format(
@@ -724,7 +722,6 @@ class TestAddAnnotatedVariantSet(AbstractRepoManagerTest):
             exceptions.OntologyNameNotFoundException, self.runCommand, cmd)
 
 
-@unittest.skip("TODO Ontology")
 class TestDuplicateNameDelete(AbstractRepoManagerTest):
     """
     If two objects exist with the same name in different datasets,
@@ -762,8 +759,8 @@ class TestDuplicateNameDelete(AbstractRepoManagerTest):
             self._repoPath, self.dataset1Name, readGroupSetName)
         self.runCommand(removeCmd)
         self.readDatasets()
-        self.assertEqual(len(self.dataset1.getReadGroupSets()), 0)
-        self.assertEqual(len(self.dataset2.getReadGroupSets()), 1)
+        self.assertEqual(len(list(self.dataset1.read_group_sets)), 0)
+        self.assertEqual(len(list(self.dataset2.read_group_sets)), 1)
 
     def testVariantSetDelete(self):
         vcfDir = paths.vcfDirPath
@@ -781,8 +778,8 @@ class TestDuplicateNameDelete(AbstractRepoManagerTest):
             self._repoPath, self.dataset1Name, variantSetName)
         self.runCommand(removeCmd)
         self.readDatasets()
-        self.assertEqual(len(self.dataset1.getVariantSets()), 0)
-        self.assertEqual(len(self.dataset2.getVariantSets()), 1)
+        self.assertEqual(len(list(self.dataset1.variant_sets)), 0)
+        self.assertEqual(len(list(self.dataset2.variant_sets)), 1)
 
     @unittest.skip("TODO features")
     def testFeatureSetDelete(self):

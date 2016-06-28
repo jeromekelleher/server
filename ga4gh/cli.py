@@ -29,11 +29,11 @@ import ga4gh.converters as converters
 import ga4gh.frontend as frontend
 import ga4gh.configtest as configtest
 import ga4gh.exceptions as exceptions
-# import ga4gh.datarepo as datarepo
 import ga4gh.protocol as protocol
 
 import ga4gh.registry as registry
 import ga4gh.datasource.htslib as htslib
+import ga4gh.datasource.obo as obo
 
 # import ga4gh.datamodel.reads as reads
 # import ga4gh.datamodel.variants as variants
@@ -1757,13 +1757,12 @@ class RepoManager(object):
         """
         self._openRepo()
         name = self._args.name
-        filePath = self._getFilePath(self._args.filePath,
-                                     self._args.relativePath)
+        filePath = self._getFilePath(
+            self._args.filePath, self._args.relativePath)
         if name is None:
             name = getNameFromPath(filePath)
-        ontology = ontologies.Ontology(name)  # noqa
-        ontology.populateFromFile(filePath)
-        self._updateRepo(self._registry.insertOntology, ontology)
+        ontology = obo.OboOntology(name, filePath)
+        self._registry.add_ontology(ontology)
 
     def addDataset(self):
         """
@@ -2054,12 +2053,11 @@ class RepoManager(object):
         Removes an ontology from the repo.
         """
         self._openRepo()
-        ontology = self._registry.getOntologyByName(self._args.ontologyName)
+        ontology = self._registry.get_ontology_by_name(self._args.ontologyName)
 
         def func():
-            self._updateRepo(self._registry.removeOntology, ontology)
-        self._confirmDelete("Ontology", ontology.getName(), func)
-
+            self._registry.remove(ontology)
+        self._confirmDelete("Ontology", ontology.name, func)
     #
     # Methods to simplify adding common arguments to the parser.
     #

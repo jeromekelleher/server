@@ -93,6 +93,41 @@ class Info(SqlAlchemyBase):
 
 #####################################################################
 #
+# Ontologies
+#
+#####################################################################
+
+class Ontology(SqlAlchemyBase):
+    __tablename__ = 'Ontology'
+
+    id = create_id_column()
+    """
+    The server ID for this Ontology.
+    """
+
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
+    """
+    The name of this ontology. Unique within the repository.
+    """
+
+    ontology_prefix = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The ontology prefix string, i.e. "SO" for a sequence ontology
+    and "GO" for gene a ontology.
+    """
+
+    # TODO Should we add more fields here to (hopefully) avoid having to
+    # upgrade the tables in the future??
+
+    type = sqlalchemy.Column(sqlalchemy.String)
+    __mapper_args__ = {
+         'polymorphic_identity': 'Ontology',
+         'polymorphic_on': type
+    }
+
+
+#####################################################################
+#
 # References
 #
 #####################################################################
@@ -839,6 +874,12 @@ class RegistryDb(object):
             else:
                 raise ie
 
+    def add_ontology(self, ontology):
+        """
+        Adds the specified ontology to this data repository.
+        """
+        self.__add(ontology)
+
     def add_reference_set(self, reference_set):
         """
         Adds the specified reference set to this data repository.
@@ -875,6 +916,16 @@ class RegistryDb(object):
             raise exceptions.DatasetNameNotFoundException(name)
         return result
 
+    def get_ontology_by_name(self, name):
+        """
+        Returns the ontology with the specified name.
+        """
+        result = self._session.query(Ontology).filter(
+            Ontology.name == name).first()
+        if result is None:
+            raise exceptions.OntologyNameNotFoundException(name)
+        return result
+
     def get_reference_set_by_name(self, name):
         """
         Returns the reference_set with the specified name.
@@ -890,8 +941,10 @@ class RegistryDb(object):
         Returns the variant_set with the specified name from the dataset
         with the specified name.
         """
-        result = self._session.query(VariantSet).filter(
-            Dataset.name == dataset_name, VariantSet.name == name).first()
+        query = self._session.query(VariantSet).join(VariantSet.dataset)
+        query = query.filter(
+            VariantSet.name == name, Dataset.name == dataset_name)
+        result = query.first()
         if result is None:
             raise exceptions.VariantSetNameNotFoundException(name)
         return result
@@ -901,8 +954,10 @@ class RegistryDb(object):
         Returns the read_group_set with the specified name from the dataset
         with the specified name.
         """
-        result = self._session.query(ReadGroupSet).filter(
-            Dataset.name == dataset_name, ReadGroupSet.name == name).first()
+        query = self._session.query(ReadGroupSet).join(ReadGroupSet.dataset)
+        query = query.filter(
+            ReadGroupSet.name == name, Dataset.name == dataset_name)
+        result = query.first()
         if result is None:
             raise exceptions.ReadGroupSetNameNotFoundException(name)
         return result
