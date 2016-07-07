@@ -537,14 +537,40 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
         finally:
             alignment_file.close()
 
-    def __get_read_group(self, name):
+    def check_references(self, reference_set):
         """
-        Returns the read group associated with the specified name. The
-        name must be bytes encoded _not_ unicode.
+        Ensure that references are consistent between the DB reference set
+        and the references found in the BAM header.
         """
+        alignment_file = self.__open_file(self.data_url, self.index_url)
+        try:
+            # Get the reference names from the alignment file.
+            header_reference_names = set()
+            for reference_name in alignment_file.references:
+                header_reference_names.add(reference_name)
+            db_reference_names = set(
+                reference.name.encode() for reference
+                in reference_set.references)
+            if not db_reference_names.issubset(header_reference_names):
+                missing = db_reference_names - header_reference_names
+                raise exceptions.ReadGroupReferenceNotFound(
+                    self.data_url, sorted(missing), reference_set.name)
+        finally:
+            alignment_file.close()
+
+    def __get_read_group_id(self, name):
+        """
+        Returns the read group ID associated with the specified name. The
+        name must be bytes encoded _not_ unicode. If the name is not known
+        we return the empty string.
+        """
+        # TODO is returning the empty string the correct behaviour here? The
+        # read doesn't belong to a read group in the file, so should we have a
+        # synthetic read group to catch those that aren't explicitlu assigned
+        # to one??
         # TODO avoid creating the dictionary here.
-        name_map = {rg.name.encode(): rg for rg in self.read_groups}
-        return name_map[name]
+        name_map = {rg.name.encode(): str(rg.id) for rg in self.read_groups}
+        return name_map.get(name, "")
 
     def __open_file(self, data_url, index_url):
         # We need to check to see if the path exists here as pysam does
@@ -656,13 +682,13 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
         ret.fragment_length = read.template_length
         ret.fragment_name = read.query_name
         # TODO default read group name
-        read_group_name = None
+        read_group_name = DEFAULT_READGROUP_NAME
         for key, value in read.tags:
             if key == b"RG":
                 read_group_name = value
             else:
                 ret.info[key].values.add().string_value = str(value)
-        ret.read_group_id = str(self.__get_read_group(read_group_name).id)
+        ret.read_group_id = self.__get_read_group_id(read_group_name)
         if SamFlags.isFlagSet(read.flag, SamFlags.MATE_UNMAPPED):
             ret.next_mate_position.Clear()
         else:

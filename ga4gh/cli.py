@@ -184,12 +184,14 @@ class AbstractQueryRunner(object):
         # the backend instantiation into the client, and letting the
         # client be a factory, instantiating the correct Client class
         # depending on the prefix.
-        filePrefix = "file://"
-        if args.baseUrl.startswith(filePrefix):
-            registry_url = args.baseUrl[len(filePrefix):]
-            repo = datarepo.SqlDataRepository(registry_url)
-            repo.open(datarepo.MODE_READ)
-            theBackend = backend.Backend(repo)
+        # TODO should be generalise this so sqlalchemy does this parsing?
+        sqlite_prefix = "sqlite://"
+        postgres_prefix = "postgres://"
+        url = args.baseUrl
+        if url.startswith(sqlite_prefix) or url.startswith(postgres_prefix):
+            registry_db = registry.RegistryDb(url)
+            registry_db.open()
+            theBackend = backend.Backend(registry_db)
             self._client = client.LocalClient(theBackend)
         else:
             self._client = client.HttpClient(
@@ -1824,6 +1826,7 @@ class RepoManager(object):
             # Try to find a reference set name from the BAM header.
             referenceSetName = readGroupSet.assembly_identifier
         referenceSet = self._registry.get_reference_set_by_name(referenceSetName)
+        readGroupSet.check_references(referenceSet)
         readGroupSet.reference_set = referenceSet
         readGroupSet.dataset = dataset
         self._registry.add_read_group_set(readGroupSet)

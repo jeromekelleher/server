@@ -399,7 +399,7 @@ class IndividualNameNotFoundException(NotFoundException):
 
 class ReferenceSetNameNotFoundException(NotFoundException):
     """
-    Indicates a request was made for a ReferenceSetSet with a name that
+    Indicates a request was made for a ReferenceSet with a name that
     does not exist.
     """
     def __init__(self, name):
@@ -584,11 +584,11 @@ class ReadGroupReferenceNotFound(MalformedException):
     A BAM file contains reference names that are not in the linked
     ReadGroupSet.
     """
-    def __init__(self, fileName, referenceName, referenceSetName):
+    def __init__(self, fileName, missingReferences, referenceSetName):
         self.message = (
-            "The BAM file '{}' contains the reference '{}' which "
-            "is not present in the ReferenceSet  '{}'".format(
-                fileName, referenceName, referenceSetName))
+            "The ReferenceSet {} contains the references {} which do "
+            "are not present in the BAM file '{}'".format(
+                referenceSetName, missingReferences, fileName))
 
 
 class MultipleReferenceSetsInReadGroupSet(MalformedException):

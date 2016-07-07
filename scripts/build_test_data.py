@@ -39,8 +39,12 @@ def main(args):
 
     pattern = os.path.join(prefix, "datasets/dataset1/reads", "*.bam")
     for dataFile in glob.glob(pattern):
+        referenceSetName = "Default"
+        name = os.path.split(dataFile)[-1]
+        if name.startswith("HG"):
+            referenceSetName = "NCBI37"
         run("add-readgroupset", repoFile, datasetName, useRelativePath,
-            dataFile, "-R NCBI37")
+            dataFile, "-R", referenceSetName )
 
     pattern = os.path.join(prefix, "datasets/dataset1/variants", "*")
     for j, dataFile in enumerate(glob.glob(pattern)):
