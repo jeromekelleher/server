@@ -12,7 +12,6 @@ import mock
 import ga4gh.protocol as protocol
 import ga4gh.backend as backend
 import ga4gh.client as client
-import ga4gh.datarepo as datarepo
 import tests.utils as utils
 import ga4gh.exceptions as exceptions
 
@@ -293,13 +292,13 @@ class DatamodelObjectWrapper(object):
     """
     Thin wrapper class that allows us to treat data model objects uniformly.
     We should update the data model interface so that objects are always
-    returned so that we always call toProtocolElement on the results.
+    returned so that we always call get_protobuf on the results.
     Variants and Reads are the exceptions here.
     """
     def __init__(self, gaObject):
         self.gaObject = gaObject
 
-    def toProtocolElement(self):
+    def get_protobuf(self):
         return self.gaObject
 
 
@@ -409,13 +408,13 @@ class ExhaustiveListingsMixin(object):
     """
     @classmethod
     def setUpClass(cls):
-        cls.backend = backend.Backend(datarepo.SimulatedDataRepository(
-            randomSeed=100, numDatasets=3,
-            numVariantSets=3, numCalls=3, variantDensity=0.5,
-            numReferenceSets=3, numReferencesPerReferenceSet=3,
-            numReadGroupSets=3, numReadGroupsPerReadGroupSet=3,
-            numAlignments=3))
-        cls.dataRepo = cls.backend.getDataRepository()
+        registry_db = utils.create_simulated_registry_db(
+            random_seed=100, num_datasets=3,
+            num_variant_sets=3, num_calls=3,
+            num_reference_sets=3, num_references_per_reference_set=3,
+            num_read_group_sets=3, num_read_groups_per_read_group_set=3)
+        cls.backend = backend.Backend(registry_db)
+        cls.registry_db = registry_db
 
     def setUp(self):
         self.client = self.getClient()
@@ -425,96 +424,62 @@ class ExhaustiveListingsMixin(object):
         Verifies that the specified list of protocol objects corresponds
         to the specified list of datamodel objects.
         """
+        num_objects = 0
         for gaObject, datamodelObject in utils.zipLists(
                 gaObjects, datamodelObjects):
-            self.assertEqual(gaObject, datamodelObject.toProtocolElement())
+            self.assertEqual(gaObject, datamodelObject.get_protobuf())
             otherGaObject = getMethod(gaObject.id)
             self.assertEqual(gaObject, otherGaObject)
+            num_objects += 1
+        self.assertGreater(num_objects, 0)
 
     def testAllDatasets(self):
         datasets = list(self.client.searchDatasets())
         self.verifyObjectList(
-            datasets, self.dataRepo.getDatasets(), self.client.getDataset)
+            datasets, self.registry_db.get_datasets(), self.client.getDataset)
 
     def testAllReferenceSets(self):
         referenceSets = list(self.client.searchReferenceSets())
         self.verifyObjectList(
-            referenceSets, self.dataRepo.getReferenceSets(),
+            referenceSets, self.registry_db.get_reference_sets(),
             self.client.getReferenceSet)
 
     def testAllReferences(self):
         for referenceSet in self.client.searchReferenceSets():
             references = list(self.client.searchReferences(referenceSet.id))
-            datamodelReferences = self.dataRepo.getReferenceSet(
-                referenceSet.id).getReferences()
+            datamodelReferences = self.registry_db.get_reference_set(
+                referenceSet.id).references
             self.verifyObjectList(
                 references, datamodelReferences, self.client.getReference)
             for datamodelReference in datamodelReferences:
-                bases = self.client.listReferenceBases(
-                    datamodelReference.getId())
-                otherBases = datamodelReference.getBases(
-                    0, datamodelReference.getLength())
+                bases = self.client.listReferenceBases(datamodelReference.id)
+                otherBases = datamodelReference.run_get_bases(
+                    0, datamodelReference.length)
                 self.assertEqual(bases, otherBases)
 
     def testAllVariantSets(self):
         for dataset in self.client.searchDatasets():
             variantSets = list(self.client.searchVariantSets(dataset.id))
-            datamodelVariantSets = self.dataRepo.getDataset(
-                dataset.id).getVariantSets()
+            datamodelVariantSets = list(self.registry_db.get_dataset(
+                dataset.id).variant_sets)
             self.verifyObjectList(
                 variantSets, datamodelVariantSets, self.client.getVariantSet)
-
-    def testAllVariants(self):
-        for datamodelDataset in self.dataRepo.getDatasets():
-            for datamodelVariantSet in datamodelDataset.getVariantSets():
-                # TODO the values should be derived from the datamodel
-                # variant set object.
-                start = 0
-                end = 20
-                referenceName = "fixme"
-                variants = list(self.client.searchVariants(
-                    datamodelVariantSet.getId(), start=start, end=end,
-                    referenceName=referenceName))
-                datamodelVariants = [
-                    DatamodelObjectWrapper(variant) for variant in
-                    datamodelVariantSet.getVariants(
-                        referenceName, start, end)]
-                self.verifyObjectList(
-                    variants, datamodelVariants, self.client.getVariant)
 
     def testAllReadGroupSets(self):
         for dataset in self.client.searchDatasets():
             readGroupSets = list(self.client.searchReadGroupSets(dataset.id))
-            datamodelReadGroupSets = self.dataRepo.getDataset(
-                dataset.id).getReadGroupSets()
+            datamodelReadGroupSets = list(self.registry_db.get_dataset(
+                dataset.id).read_group_sets)
             self.verifyObjectList(
                 readGroupSets, datamodelReadGroupSets,
                 self.client.getReadGroupSet)
             # Check the readGroups.
             for readGroupSet, datamodelReadGroupSet in zip(
                     readGroupSets, datamodelReadGroupSets):
-                datamodelReadGroups = datamodelReadGroupSet.getReadGroups()
+                datamodelReadGroups = datamodelReadGroupSet.read_groups
                 self.verifyObjectList(
                     readGroupSet.read_groups, datamodelReadGroups,
                     self.client.getReadGroup)
-
-    def testAllReads(self):
-        for dmDataset in self.dataRepo.getDatasets():
-            for dmReadGroupSet in dmDataset.getReadGroupSets():
-                dmReferenceSet = dmReadGroupSet.getReferenceSet()
-                for dmReadGroup in dmReadGroupSet.getReadGroups():
-                    for dmReference in dmReferenceSet.getReferences():
-                        # TODO fix these coordinates.
-                        start = 0
-                        end = 10
-                        dmReads = list(dmReadGroup.getReadAlignments(
-                            dmReference, start, end))
-                        reads = list(self.client.searchReads(
-                            [dmReadGroup.getId()], dmReference.getId(),
-                            start, end))
-                        self.assertGreater(len(reads), 0)
-                        for dmRead, read in utils.zipLists(dmReads, reads):
-                            self.assertEqual(dmRead, read)
 
 
 class TestExhaustiveListingsHttp(ExhaustiveListingsMixin, unittest.TestCase):
@@ -542,18 +507,19 @@ class PagingMixin(object):
     @classmethod
     def setUpClass(cls):
         cls.numReferences = 25
-        cls.backend = backend.Backend(datarepo.SimulatedDataRepository(
-            randomSeed=100, numDatasets=0,
-            numReferenceSets=1,
-            numReferencesPerReferenceSet=cls.numReferences))
-        cls.dataRepo = cls.backend.getDataRepository()
+        registry_db = utils.create_simulated_registry_db(
+            random_seed=100, num_datasets=0,
+            num_reference_sets=1,
+            num_references_per_reference_set=cls.numReferences)
+        cls.backend = backend.Backend(registry_db)
+        cls.registry_db = registry_db
 
     def setUp(self):
         self.client = self.getClient()
-        self.datamodelReferenceSet = self.dataRepo.getReferenceSetByIndex(0)
-        self.datamodelReferences = self.datamodelReferenceSet.getReferences()
+        self.datamodelReferenceSet = self.registry_db.get_reference_sets()[0]
+        self.datamodelReferences = self.datamodelReferenceSet.references
         self.references = [
-            dmReference.toProtocolElement()
+            dmReference.get_protobuf()
             for dmReference in self.datamodelReferences]
         self.assertEqual(len(self.references), self.numReferences)
 
@@ -562,7 +528,7 @@ class PagingMixin(object):
         Verifies that we correctly return all references.
         """
         references = list(self.client.searchReferences(
-            self.datamodelReferenceSet.getId()))
+            str(self.datamodelReferenceSet.id)))
         self.assertEqual(references, self.references)
 
     def testDefaultPageSize(self):

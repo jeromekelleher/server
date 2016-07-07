@@ -56,6 +56,16 @@ class Dataset(SqlAlchemyBase):
     name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
     description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
 
+    # We may have a large number of variant and read group sets per dataset,
+    # so we don't want to populate these lists unless we need them.
+    variant_sets = orm.relationship(
+        "VariantSet", back_populates="dataset", lazy="dynamic",
+        cascade="all, delete, delete-orphan")
+    read_group_sets = orm.relationship(
+        "ReadGroupSet", back_populates="dataset", lazy="dynamic",
+        cascade="all, delete, delete-orphan")
+
+
     def __init__(self, name):
         self.name = name
         self.description = ""
@@ -455,7 +465,7 @@ class VariantSet(SqlAlchemyBase):
         sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
         nullable=False)
     dataset = orm.relationship(
-        "Dataset",  cascade="all, delete, delete-orphan", single_parent=True)
+        "Dataset", back_populates="variant_sets", single_parent=True)
     reference_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
         nullable=False)
@@ -672,7 +682,7 @@ class ReadGroupSet(SqlAlchemyBase):
         sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
         nullable=False)
     dataset = orm.relationship(
-        "Dataset",  cascade="all, delete, delete-orphan", single_parent=True)
+        "Dataset", back_populates="read_group_sets", single_parent=True)
     reference_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
         nullable=False)
@@ -879,6 +889,17 @@ class RegistryDb(object):
     # Object accessors by ID. These are run when the corresponding GET request
     # is received.
 
+    def get_dataset(self, id_):
+        """
+        Retuns the Dataset with the specified ID, or raises a
+        DatasetNotFoundException if it does not exist.
+        """
+        result = self._session.query(Dataset).filter(
+            Dataset.id == id_).first()
+        if result is None:
+            raise exceptions.DatasetNotFoundException(id_)
+        return result
+
     def get_read_group(self, id_):
         """
         Retuns the ReadGroup with the specified ID, or raises a
@@ -949,6 +970,9 @@ class RegistryDb(object):
     def get_reference_sets(self):
         return self._session.query(ReferenceSet).all()
 
+    def get_datasets(self):
+        return self._session.query(Dataset).all()
+
     # Getters to provide queries corresponding to the external search requests.
 
     def get_references_search_query(self, request):
@@ -989,7 +1013,8 @@ class RegistryDb(object):
         Returns the query object representing all the rows in the specified
         SearchVariantSets request.
         """
-        query = self._session.query(VariantSet)
+        query = self._session.query(VariantSet).filter(
+            VariantSet.dataset_id == request.dataset_id)
         return query
 
     def get_call_sets_search_query(self, request):
@@ -1009,7 +1034,8 @@ class RegistryDb(object):
         Returns the query object representing all the rows in the specified
         SearchReadGroupSetsRequest.
         """
-        query = self._session.query(ReadGroupSet)
+        query = self._session.query(ReadGroupSet).filter(
+            ReadGroupSet.dataset_id == request.dataset_id)
         if request.name:
             query = query.filter(ReadGroupSet.name == request.name)
         return query

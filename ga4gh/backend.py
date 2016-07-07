@@ -315,18 +315,18 @@ class Backend(object):
     Backend for handling the server requests.
     This class provides methods for all of the GA4GH protocol end points.
     """
-    def __init__(self, dataRepository):
+    def __init__(self, registry_db):
         self._requestValidation = False
         self._responseValidation = False
         self._defaultPageSize = 100
         self._maxResponseLength = 2**20  # 1 MiB
-        self._dataRepository = dataRepository
+        self._registry_db = registry_db
 
-    def getDataRepository(self):
+    def get_registry_db(self):
         """
-        Get the data repository used by this backend
+        Get the registry DB used by this backend
         """
-        return self._dataRepository
+        return self._registry_db
 
     def setRequestValidation(self, requestValidation):
         """
@@ -476,7 +476,7 @@ class Backend(object):
         Returns a generator over the (dataset, nextPageToken) pairs
         defined by the specified request
         """
-        query = self._dataRepository.get_datasets_search_query(request)
+        query = self._registry_db.get_datasets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
 <<<<<<< HEAD
@@ -544,7 +544,7 @@ class Backend(object):
         Returns a generator over the (referenceSet, nextPageToken) pairs
         defined by the specified request.
         """
-        query = self._dataRepository.get_reference_sets_search_query(request)
+        query = self._registry_db.get_reference_sets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
     def referencesGenerator(self, request, responseBuilder):
@@ -552,7 +552,7 @@ class Backend(object):
         Returns a generator over the (reference, nextPageToken) pairs
         defined by the specified request.
         """
-        query = self._dataRepository.get_references_search_query(request)
+        query = self._registry_db.get_references_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
     def variantSetsGenerator(self, request, responseBuilder):
@@ -560,7 +560,7 @@ class Backend(object):
         Returns a generator over the (variantSet, nextPageToken) pairs defined
         by the specified request.
         """
-        query = self._dataRepository.get_variant_sets_search_query(request)
+        query = self._registry_db.get_variant_sets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
     def variantAnnotationSetsGenerator(self, request):
@@ -570,7 +570,7 @@ class Backend(object):
         """
         compoundId = datamodel.VariantSetCompoundId.parse(
             request.variant_set_id)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        dataset = self._registry_db.getDataset(compoundId.dataset_id)
         variantSet = dataset.getVariantSet(request.variant_set_id)
         return self._topLevelObjectGenerator(
             request, variantSet.getNumVariantAnnotationSets(),
@@ -586,7 +586,7 @@ class Backend(object):
         if len(request.read_group_ids) < 1:
             raise exceptions.BadRequestException(
                 "At least one readGroupId must be specified")
-        db = self.getDataRepository()
+        db = self._registry_db
         read_group_set = None
         read_groups = []
         for read_group_id in request.read_group_ids:
@@ -606,7 +606,7 @@ class Backend(object):
         Returns a generator over the (variant, nextPageToken) pairs defined
         by the specified request.
         """
-        variant_set = self._dataRepository.get_variant_set(
+        variant_set = self._registry_db.get_variant_set(
                 request.variant_set_id)
         call_sets = []
         # Avoid the query to find call_sets unless we need to.
@@ -621,7 +621,7 @@ class Backend(object):
 
         # compoundId = datamodel.VariantSetCompoundId \
         #     .parse(request.variant_set_id)
-        # dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        # dataset = self._registry_db.getDataset(compoundId.dataset_id)
         # variantSet = dataset.getVariantSet(compoundId.variant_set_id)
         # intervalIterator = VariantsIntervalIterator(request, variantSet)
         # return intervalIterator
@@ -633,7 +633,7 @@ class Backend(object):
         """
         compoundId = datamodel.VariantAnnotationSetCompoundId.parse(
             request.variant_annotation_set_id)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        dataset = self._registry_db.getDataset(compoundId.dataset_id)
         variantSet = dataset.getVariantSet(compoundId.variant_set_id)
         variantAnnotationSet = variantSet.getVariantAnnotationSet(
             request.variant_annotation_set_id)
@@ -673,7 +673,7 @@ class Backend(object):
         if compoundId is None:
             raise exceptions.FeatureSetNotSpecifiedException()
 
-        dataset = self.getDataRepository().getDataset(
+        dataset = self._registry_db.getDataset(
             compoundId.dataset_id)
         featureSet = dataset.getFeatureSet(compoundId.feature_set_id)
         if request.start == request.end and request.start == 0:
@@ -692,9 +692,11 @@ class Backend(object):
         Returns a generator over the (callSet, nextPageToken) pairs defined
         by the specified request.
         """
+        query = self._registry_db.get_call_sets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
         # compoundId = datamodel.VariantSetCompoundId.parse(
         #     request.variant_set_id)
-        # dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        # dataset = self._registry_db.getDataset(compoundId.dataset_id)
         # variantSet = dataset.getVariantSet(compoundId.variant_set_id)
         # results = []
         # for obj in variantSet.getCallSets():
@@ -708,15 +710,13 @@ class Backend(object):
         #     if include:
         #         results.append(obj)
         # return self._objectListGenerator(request, results)
-        query = self._dataRepository.get_call_sets_search_query(request)
-        self._run_sql_query(request, query, responseBuilder)
 
     def featureSetsGenerator(self, request):
         """
         Returns a generator over the (featureSet, nextPageToken) pairs
         defined by the specified request.
         """
-        dataset = self.getDataRepository().getDataset(request.dataset_id)
+        dataset = self._registry_db.getDataset(request.dataset_id)
         return self._topLevelObjectGenerator(
             request, dataset.getNumFeatureSets(),
             dataset.getFeatureSetByIndex)
@@ -777,7 +777,7 @@ class Backend(object):
         Runs a listReferenceBases request for the specified ID and
         request arguments.
         """
-        reference = self.getDataRepository().get_reference(id_)
+        reference = self._registry_db.get_reference(id_)
         start = _parseIntegerArgument(requestArgs, 'start', 0)
         end = _parseIntegerArgument(requestArgs, 'end', reference.length)
         if end == 0:  # assume meant "get all"
@@ -809,7 +809,7 @@ class Backend(object):
         """
         Returns a callset with the given id
         """
-        call_set = self.getDataRepository().get_call_set(id_)
+        call_set = self._registry_db.get_call_set(id_)
         return self.runGetRequest(call_set)
 
     def runGetVariant(self, id_):
@@ -817,7 +817,7 @@ class Backend(object):
         Returns a variant with the given id
         """
         compound_id = registry.VariantCompoundId.parse(id_)
-        variant_set = self.getDataRepository().get_variant_set(
+        variant_set = self._registry_db.get_variant_set(
                 int(compound_id.variant_set_id))
         variant = variant_set.run_get_variant(compound_id)
         # TODO variant is a special case here, as it's returning a
@@ -850,7 +850,7 @@ class Backend(object):
         the feature compoundID passed in.
         """
         compoundId = datamodel.FeatureCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        dataset = self._registry_db.getDataset(compoundId.dataset_id)
         featureSet = dataset.getFeatureSet(compoundId.feature_set_id)
         gaFeature = featureSet.getFeature(compoundId)
         jsonString = protocol.toJson(gaFeature)
@@ -860,35 +860,35 @@ class Backend(object):
         """
         Returns a readGroupSet with the given id_
         """
-        read_group_set = self.getDataRepository().get_read_group_set(id_)
+        read_group_set = self._registry_db.get_read_group_set(id_)
         return self.runGetRequest(read_group_set)
 
     def runGetReadGroup(self, id_):
         """
         Returns a read group with the given id_
         """
-        read_group = self.getDataRepository().get_read_group(id_)
+        read_group = self._registry_db.get_read_group(id_)
         return self.runGetRequest(read_group)
 
     def runGetReference(self, id_):
         """
         Runs a getReference request for the specified ID.
         """
-        reference = self._dataRepository.get_reference(id_)
+        reference = self._registry_db.get_reference(id_)
         return self.runGetRequest(reference)
 
     def runGetReferenceSet(self, id_):
         """
         Runs a getReferenceSet request for the specified ID.
         """
-        reference_set = self.getDataRepository().get_reference_set(id_)
+        reference_set = self._registry_db.get_reference_set(id_)
         return self.runGetRequest(reference_set)
 
     def runGetVariantSet(self, id_):
         """
         Runs a getVariantSet request for the specified ID.
         """
-        variant_set = self.getDataRepository().get_variant_set(id_)
+        variant_set = self._registry_db.get_variant_set(id_)
         return self.runGetRequest(variant_set)
 
     def runGetFeatureSet(self, id_):
@@ -896,7 +896,7 @@ class Backend(object):
         Runs a getFeatureSet request for the specified ID.
         """
         compoundId = datamodel.FeatureSetCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        dataset = self._registry_db.getDataset(compoundId.dataset_id)
         featureSet = dataset.getFeatureSet(id_)
         return self.runGetRequest(featureSet)
 
@@ -904,7 +904,7 @@ class Backend(object):
         """
         Runs a getDataset request for the specified ID.
         """
-        dataset = self.getDataRepository().getDataset(id_)
+        dataset = self._registry_db.get_dataset(id_)
         return self.runGetRequest(dataset)
 
     def runGetVariantAnnotationSet(self, id_):
@@ -912,7 +912,7 @@ class Backend(object):
         Runs a getVariantSet request for the specified ID.
         """
         compoundId = datamodel.VariantAnnotationSetCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        dataset = self._registry_db.getDataset(compoundId.dataset_id)
         variantSet = dataset.getVariantSet(compoundId.variant_set_id)
         variantAnnotationSet = variantSet.getVariantAnnotationSet(id_)
         return self.runGetRequest(variantAnnotationSet)
