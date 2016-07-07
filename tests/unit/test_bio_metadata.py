@@ -7,26 +7,22 @@ from __future__ import unicode_literals
 
 import unittest
 
-import ga4gh.datamodel.datasets as datasets
 import ga4gh.exceptions as exceptions
-import ga4gh.datamodel.bio_metadata as bioMetadata
 import ga4gh.protocol as protocol
-from ga4gh import pb
+import ga4gh.registry as registry
 
-
+@unittest.skip("TODO Proper tests for Biometadata")
 class TestIndividuals(unittest.TestCase):
     """
     Tests the Individuals class
     """
     def testToProtocolElement(self):
-        dataset = datasets.Dataset('dataset1')
         term = protocol.OntologyTerm()
         term.term = "male genotypic sex"
         term.id = "PATO:0020001"
         term.source_name = "PATO"
         term.source_version = pb.string("2015-11-18")
         # Write out a valid input
-        print(protocol.toJsonDict(term))
         validIndividual = protocol.Individual(
             name="test",
             created="2016-05-19T21:00:19Z",
@@ -34,8 +30,7 @@ class TestIndividuals(unittest.TestCase):
             sex=term)
         validIndividual.info['test'].values.add().string_value = 'test-info'
         # pass through protocol creation
-        individual = bioMetadata.Individual(
-            dataset, "test")
+        individual = registry.Individual()
         individual.populateFromJson(protocol.toJson(validIndividual))
         gaIndividual = individual.toProtocolElement()
         # Verify elements exist
@@ -51,6 +46,7 @@ class TestIndividuals(unittest.TestCase):
             invalidIndividual)
 
 
+@unittest.skip("TODO Proper tests for Biometadata")
 class TestBioSamples(unittest.TestCase):
     """
     Tests the BioSamples class

@@ -182,16 +182,26 @@ def create_simulated_registry_db(
     for j in range(num_datasets):
         dataset = registry.Dataset("sim_ds_{}".format(j))
         registry_db.add_dataset(dataset)
+        for k in range(num_calls):
+            individual = registry.Individual("sim_ind_{}".format(k))
+            individual.dataset = dataset
+            registry_db.add(individual)
+            bio_sample = registry.BioSample("sim_bio_sample_{}".format(k))
+            bio_sample.dataset = dataset
+            bio_sample.individual = individual
+            registry_db.add(bio_sample)
+        bio_samples = list(dataset.bio_samples)
         for k in range(num_variant_sets):
             variant_set = simulator.SimulatedVariantSet(
                 "sim_var_set_{}".format(k),
-                random_seed=random.randint(0, 2**31), num_calls=num_calls)
+                random_seed=random.randint(0, 2**31),
+                bio_samples=bio_samples)
             variant_set.dataset = dataset
             variant_set.reference_set = random.choice(reference_sets)
             registry_db.add_variant_set(variant_set)
         for k in range(num_read_group_sets):
             read_group_set = simulator.SimulatedReadGroupSet(
-                "sim_rg_set_{}".format(k),
+                "sim_rg_set_{}".format(k), bio_samples,
                 random_seed=random.randint(0, 2**31),
                 num_read_groups=num_read_groups_per_read_group_set)
             read_group_set.dataset = dataset

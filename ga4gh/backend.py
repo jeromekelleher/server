@@ -481,36 +481,43 @@ class Backend(object):
         query = self._registry_db.get_datasets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
-<<<<<<< HEAD
-    def bioSamplesGenerator(self, request):
-        dataset = self.getDataRepository().getDataset(request.dataset_id)
-        results = []
-        for obj in dataset.getBioSamples():
-            include = True
-            if request.name:
-                if request.name != obj.getLocalId():
-                    include = False
-            if request.individual_id:
-                if request.individual_id != obj.getIndividualId():
-                    include = False
-            if include:
-                results.append(obj)
-        return self._objectListGenerator(request, results)
+    def bioSamplesGenerator(self, request, responseBuilder):
+        # Ensure that the dataset exists.
+        self._registry_db.get_dataset(request.dataset_id)
+        query = self._registry_db.get_bio_samples_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
-    def individualsGenerator(self, request):
-        dataset = self.getDataRepository().getDataset(request.dataset_id)
-        results = []
-        for obj in dataset.getIndividuals():
-            include = True
-            if request.name:
-                if request.name != obj.getLocalId():
-                    include = False
-            if include:
-                results.append(obj)
-        return self._objectListGenerator(request, results)
+        # dataset = self.getDataRepository().getDataset(request.dataset_id)
+        # results = []
+        # for obj in dataset.getBioSamples():
+        #     include = True
+        #     if request.name:
+        #         if request.name != obj.getLocalId():
+        #             include = False
+        #     if request.individual_id:
+        #         if request.individual_id != obj.getIndividualId():
+        #             include = False
+        #     if include:
+        #         results.append(obj)
+        # return self._objectListGenerator(request, results)
+
+    def individualsGenerator(self, request, responseBuilder):
+        # Ensure that the dataset exists.
+        self._registry_db.get_dataset(request.dataset_id)
+        query = self._registry_db.get_individuals_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
+        # dataset = self.getDataRepository().getDataset(request.dataset_id)
+        # results = []
+        # for obj in dataset.getIndividuals():
+        #     include = True
+        #     if request.name:
+        #         if request.name != obj.getLocalId():
+        #             include = False
+        #     if include:
+        #         results.append(obj)
+        # return self._objectListGenerator(request, results)
 
     def readGroupSetsGenerator(self, request, responseBuilder):
-<<<<<<< HEAD
         # """
         # Returns a generator over the (readGroupSet, nextPageToken) pairs
         # defined by the specified request.
@@ -832,18 +839,14 @@ class Backend(object):
         """
         Runs a getBioSample request for the specified ID.
         """
-        compoundId = datamodel.BioSampleCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        bioSample = dataset.getBioSample(id_)
-        return self.runGetRequest(bioSample)
+        bio_sample = self._registry_db.get_bio_sample(id_)
+        return self.runGetRequest(bio_sample)
 
     def runGetIndividual(self, id_):
         """
         Runs a getIndividual request for the specified ID.
         """
-        compoundId = datamodel.BioSampleCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        individual = dataset.getIndividual(id_)
+        individual = self._registry_db.get_individual(id_)
         return self.runGetRequest(individual)
 
     def runGetFeature(self, id_):

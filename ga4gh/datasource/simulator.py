@@ -121,13 +121,14 @@ class SimulatedVariantSet(registry.VariantSet):
     }
 
     def __init__(
-            self, name, random_seed, num_calls=1):
+            self, name, random_seed, bio_samples):
         super(SimulatedVariantSet, self).__init__(name)
         self.random_seed = random_seed
         self._create_metadata()
-        for i in range(num_calls):
+        for i, bio_sample in enumerate(bio_samples):
             name = "simCallSet_{}".format(i)
-            call_set = registry.CallSet(name=name, sample_id=name)
+            call_set = registry.CallSet(name=name)
+            call_set.bio_sample = bio_sample
             self.call_sets.append(call_set)
 
             # # build up infos of increasing size
@@ -236,7 +237,7 @@ class SimulatedReadGroupSet(registry.ReadGroupSet):
         'polymorphic_identity': 'SimulatedReadGroupSet',
     }
 
-    def __init__(self, name, random_seed=1, num_read_groups=2):
+    def __init__(self, name, bio_samples, random_seed=1, num_read_groups=2):
         super(SimulatedReadGroupSet, self).__init__(name)
         self.random_seed = random_seed
         rng = random.Random()
@@ -244,8 +245,8 @@ class SimulatedReadGroupSet(registry.ReadGroupSet):
         for j in range(num_read_groups):
             read_group = SimulatedReadGroup(
                 name="sim_rgs{}".format(j),
-                sample_id="sim_sample_id{}".format(j),
-                random_seed=random.randint(0, 2**31))
+                random_seed=rng.randint(0, 2**31))
+            read_group.bio_sample = rng.choice(bio_samples)
             self.read_groups.append(read_group)
 
     def generate_alignment(self, reference, read_groups, start):
@@ -305,9 +306,8 @@ class SimulatedReadGroup(registry.ReadGroup):
         'polymorphic_identity': 'SimulatedReadGroup',
     }
 
-    def __init__(self, name, sample_id, random_seed=1):
-        super(SimulatedReadGroup, self).__init__(
-                name=name, sample_id=sample_id)
+    def __init__(self, name, random_seed=1):
+        super(SimulatedReadGroup, self).__init__(name=name)
         self.random_seed = random_seed
         rng = random.Random()
         rng.seed(random_seed)

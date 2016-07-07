@@ -66,6 +66,13 @@ class Dataset(SqlAlchemyBase):
     feature_sets = orm.relationship(
         "FeatureSet", back_populates="dataset", lazy="dynamic",
         cascade="all, delete, delete-orphan")
+    individuals = orm.relationship(
+        "Individual", back_populates="dataset", lazy="dynamic",
+        cascade="all, delete, delete-orphan")
+    bio_samples = orm.relationship(
+        "BioSample", back_populates="dataset", lazy="dynamic",
+        cascade="all, delete, delete-orphan")
+
 
     def __init__(self, name):
         self.name = name
@@ -77,6 +84,118 @@ class Dataset(SqlAlchemyBase):
         ret.name = self.name
         ret.description = self.description
         return ret
+
+
+class BioSample(SqlAlchemyBase):
+    """
+    A BioSample refers to a unit of biological material from which the substrate
+    molecules (e.g. genomic DNA, RNA, proteins) for molecular analyses (e.g.
+    sequencing, array hybridisation, mass-spectrometry) are extracted. Examples
+    would be a tissue biopsy, a single cell from a culture for single cell genome
+    sequencing or a protein fraction from a gradient centrifugation.
+    Several instances (e.g. technical replicates) or types of experiments (e.g.
+    genomic array as well as RNA-seq experiments) may refer to the same BioSample.
+    In the context of the GA4GH metadata schema, BioSample constitutes the central
+    reference object.
+    """
+    __tablename__ = "BioSample"
+
+    id = create_id_column()
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    disease = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    creation_timestamp = create_timestamp_column()
+    update_timestamp = create_timestamp_column()
+
+    individual_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("Individual.id"),
+        nullable=False)
+    individual = orm.relationship(
+        "Individual", back_populates="bio_samples", single_parent=True)
+    dataset_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
+        nullable=False)
+    dataset = orm.relationship(
+        "Dataset", back_populates="bio_samples", single_parent=True)
+
+    # TODO Info
+
+    __table_args__ = (
+        # BioSample names must be unique within a dataset
+        sqlalchemy.UniqueConstraint("dataset_id", "name"),
+    )
+
+    def __init__(self, name):
+        self.name = name
+        self.description = ""
+        self.disease = ""
+
+    def get_protobuf(self):
+        ret = protocol.BioSample()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.description = self.description
+        ret.individual_id = str(self.individual_id)
+        ret.dataset_id = str(self.dataset_id)
+        # .message_create_time = protocol.datetime_to_iso8601(
+        #     self.creation_timestamp)
+        # experiment.message_update_time = protocol.datetime_to_iso8601(
+        #     self.update_timestamp)
+        # TODO disease
+        return ret
+
+
+
+class Individual(SqlAlchemyBase):
+    """
+    An individual (or subject) typically corresponds to an individual
+    human or another organism.
+    """
+    __tablename__ = "Individual"
+
+    id = create_id_column()
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    sex = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    creation_timestamp = create_timestamp_column()
+    update_timestamp = create_timestamp_column()
+
+    bio_samples = orm.relationship(
+        "BioSample", back_populates="individual",
+        cascade="all, delete, delete-orphan")
+    dataset_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
+        nullable=False)
+    dataset = orm.relationship(
+        "Dataset", back_populates="individuals", single_parent=True)
+    # TODO Info
+
+    __table_args__ = (
+        # Individual names must be unique within a dataset
+        sqlalchemy.UniqueConstraint("dataset_id", "name"),
+    )
+
+    def __init__(self, name):
+        self.name = name
+        self.description = ""
+        self.sex = ""
+
+
+    def get_protobuf(self):
+        ret = protocol.Individual()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.description = self.description
+        ret.dataset_id = str(self.dataset_id)
+        # .message_create_time = protocol.datetime_to_iso8601(
+        #     self.creation_timestamp)
+        # experiment.message_update_time = protocol.datetime_to_iso8601(
+        #     self.update_timestamp)
+        # TODO sex
+        return ret
+
+
+
 
 
 class Info(SqlAlchemyBase):
@@ -460,9 +579,13 @@ class CallSet(SqlAlchemyBase):
 
     id = create_id_column()
     name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-    sample_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     creation_timestamp = create_timestamp_column()
     update_timestamp = create_timestamp_column()
+
+    bio_sample_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("BioSample.id"),
+        nullable=False)
+    bio_sample = orm.relationship("BioSample")
     variant_sets = orm.relationship(
         "VariantSet", secondary=_call_set_association_table,
         back_populates="call_sets")
@@ -471,7 +594,7 @@ class CallSet(SqlAlchemyBase):
         ret = protocol.CallSet()
         ret.id = str(self.id)
         ret.name = self.name
-        ret.sample_id = self.sample_id
+        ret.bio_sample_id = str(self.bio_sample_id)
         ret.created = protocol.datetime_to_milliseconds(
             self.creation_timestamp)
         ret.updated = protocol.datetime_to_milliseconds(
@@ -484,9 +607,8 @@ class CallSet(SqlAlchemyBase):
         #     gaCallSet.info[key].values.extend(_encodeValue(self._info[key]))
         return ret
 
-    def __init__(self, name=None, sample_id=None):
+    def __init__(self, name=None):
         self.name = name
-        self.sample_id = sample_id
 
 
 class VariantSet(SqlAlchemyBase):
@@ -664,7 +786,10 @@ class ReadGroup(SqlAlchemyBase):
     update_timestamp = create_timestamp_column()
     predicted_insert_size = sqlalchemy.Column(
         sqlalchemy.Integer, nullable=False)
-    sample_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    bio_sample_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("BioSample.id"),
+        nullable=False)
+    bio_sample = orm.relationship("BioSample")
 
     read_group_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReadGroupSet.id"),
@@ -693,9 +818,8 @@ class ReadGroup(SqlAlchemyBase):
         sqlalchemy.UniqueConstraint("read_group_set_id", "name"),
     )
 
-    def __init__(self, name=None, sample_id=None):
+    def __init__(self, name=None):
         self.name = name
-        self.sample_id = sample_id
         self.description = ""
         self.predicted_insert_size = 0
         self.read_stats = ReadStats()
@@ -707,7 +831,7 @@ class ReadGroup(SqlAlchemyBase):
         ret.id = str(self.id)
         ret.name = self.name
         ret.description = self.description
-        ret.sample_id = self.sample_id
+        ret.bio_sample_id = str(self.bio_sample_id)
         ret.created = protocol.datetime_to_milliseconds(
             self.creation_timestamp)
         ret.updated = protocol.datetime_to_milliseconds(
@@ -945,6 +1069,11 @@ class RegistryDb(object):
             else:
                 raise ie
 
+    def add(self, db_object):
+        # TODO remove the other specific methods, and updated the signature
+        # so that we can add a bunch of objects in a single transaction.
+        self.__add(db_object)
+
     def add_ontology(self, ontology):
         """
         Adds the specified ontology to this data repository.
@@ -1142,6 +1271,28 @@ class RegistryDb(object):
             raise exceptions.ReferenceNotFoundException(id_)
         return result
 
+    def get_bio_sample(self, id_):
+        """
+        Returns the BioSample with the specified ID or raises a
+        BioSampleNotFoundException if it does not exist.
+        """
+        result = self._session.query(BioSample).filter(
+            BioSample.id == id_).first()
+        if result is None:
+            raise exceptions.BioSampleNotFoundException(id_)
+        return result
+
+    def get_individual(self, id_):
+        """
+        Returns the Individual with the specified ID or raises a
+        IndividualNotFoundException if it does not exist.
+        """
+        result = self._session.query(Individual).filter(
+            Individual.id == id_).first()
+        if result is None:
+            raise exceptions.IndividualNotFoundException(id_)
+        return result
+
     # General getters to iterate over all objects in a class.
 
     def get_reference_sets(self):
@@ -1217,13 +1368,13 @@ class RegistryDb(object):
         Returns the query object representing all the rows in the specified
         SearchCallSets request.
         """
-        # First ensure that the variant set exists.
-
         query = self._session.query(CallSet)
         query = query.filter(
             CallSet.variant_sets.any(id=request.variant_set_id))
         if request.name:
             query = query.filter(CallSet.name == request.name)
+        if request.bio_sample_id:
+            query = query.filter(CallSet.bio_sample_id == request.bio_sample_id)
         return query
 
     def get_read_group_sets_search_query(self, request):
@@ -1235,6 +1386,34 @@ class RegistryDb(object):
             ReadGroupSet.dataset_id == request.dataset_id)
         if request.name:
             query = query.filter(ReadGroupSet.name == request.name)
+        if request.bio_sample_id:
+            raise exceptions.NotImplementedException(
+                "search by bio sample ID not implemented")
+        return query
+
+    def get_individuals_search_query(self, request):
+        """
+        Returns the query object representing all the rows in the specified
+        SearchIndividualsRequest.
+        """
+        query = self._session.query(Individual).filter(
+            Individual.dataset_id == request.dataset_id)
+        if request.name:
+            query = query.filter(Individual.name == request.name)
+        return query
+
+    def get_bio_samples_search_query(self, request):
+        """
+        Returns the query object representing all the rows in the specified
+        SearchBioSamplesRequest.
+        """
+        query = self._session.query(BioSample).filter(
+            BioSample.dataset_id == request.dataset_id)
+        if request.name:
+            query = query.filter(BioSample.name == request.name)
+        if request.individual_id:
+            query = query.filter(
+                BioSample.individual_id == request.individual_id)
         return query
 
 
