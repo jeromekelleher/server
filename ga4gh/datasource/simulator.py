@@ -101,10 +101,15 @@ class SimulatedVariantSet(registry.VariantSet):
         super(SimulatedVariantSet, self).__init__(name)
         self.random_seed = random_seed
         self.variant_density = variant_density
-
         self._create_metadata()
-        print("New simulated variant set")
+        for i in range(num_calls):
+            name = "simCallSet_{}".format(i)
+            call_set = registry.CallSet(name=name, sample_id=name)
+            self.call_sets.append(call_set)
 
+            # # build up infos of increasing size
+            # for j in range(i):
+            #     callSet._info["key_{}".format(j)] = "value_{}".format(j)
 
     def _create_metadata(self):
         metadata = registry.VariantSetMetadata(

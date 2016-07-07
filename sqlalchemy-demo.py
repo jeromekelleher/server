@@ -33,13 +33,17 @@ variant_set.dataset_id = dataset.id
 variant_set.reference_set_id = rs1.id
 db.add_variant_set(variant_set)
 
-variant_set = simulator.SimulatedVariantSet("sim_vs", 234)
+variant_set = simulator.SimulatedVariantSet("sim_vs", 234, num_calls=10)
 variant_set.dataset_id = dataset.id
 variant_set.reference_set_id = rs1.id
 db.add_variant_set(variant_set)
 
 for metadata in variant_set.variant_set_metadata:
     print(metadata.id, metadata.key)
+
+for call_set in variant_set.call_sets:
+    print(call_set.name, call_set.variant_sets)
+    print(call_set.get_protobuf())
 
 for rs in db.get_reference_sets():
     print(rs.id, rs.name)

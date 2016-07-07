@@ -732,27 +732,29 @@ class Backend(object):
             request.page_token, request.page_size,
             request.feature_types, parentId, request.name, request.gene_symbol)
 
-    def callSetsGenerator(self, request):
+    def callSetsGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (callSet, nextPageToken) pairs defined
         by the specified request.
         """
-        compoundId = datamodel.VariantSetCompoundId.parse(
-            request.variant_set_id)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        variantSet = dataset.getVariantSet(compoundId.variant_set_id)
-        results = []
-        for obj in variantSet.getCallSets():
-            include = True
-            if request.name:
-                if request.name != obj.getLocalId():
-                    include = False
-            if request.bio_sample_id:
-                if request.bio_sample_id != obj.getBioSampleId():
-                    include = False
-            if include:
-                results.append(obj)
-        return self._objectListGenerator(request, results)
+        # compoundId = datamodel.VariantSetCompoundId.parse(
+        #     request.variant_set_id)
+        # dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        # variantSet = dataset.getVariantSet(compoundId.variant_set_id)
+        # results = []
+        # for obj in variantSet.getCallSets():
+        #     include = True
+        #     if request.name:
+        #         if request.name != obj.getLocalId():
+        #             include = False
+        #     if request.bio_sample_id:
+        #         if request.bio_sample_id != obj.getBioSampleId():
+        #             include = False
+        #     if include:
+        #         results.append(obj)
+        # return self._objectListGenerator(request, results)
+        query = self._dataRepository.get_call_sets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
     def featureSetsGenerator(self, request):
         """
@@ -854,11 +856,8 @@ class Backend(object):
         """
         Returns a callset with the given id
         """
-        compoundId = datamodel.CallSetCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        variantSet = dataset.getVariantSet(compoundId.variant_set_id)
-        callSet = variantSet.getCallSet(id_)
-        return self.runGetRequest(callSet)
+        call_set = self.getDataRepository().get_call_set(id_)
+        return self.runGetRequest(call_set)
 
     def runGetVariant(self, id_):
         """
@@ -941,10 +940,8 @@ class Backend(object):
         """
         Runs a getVariantSet request for the specified ID.
         """
-        compoundId = datamodel.VariantSetCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        variantSet = dataset.getVariantSet(id_)
-        return self.runGetRequest(variantSet)
+        variant_set = self.getDataRepository().get_variant_set(id_)
+        return self.runGetRequest(variant_set)
 
     def runGetFeatureSet(self, id_):
         """

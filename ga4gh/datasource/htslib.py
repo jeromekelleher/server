@@ -131,13 +131,24 @@ class HtslibVariantSet(registry.VariantSet):
                     VcfFile(data_url, index_file, reference_name))
 
         self._update_metadata(var_file)
-
-        # self._updateCallSetIds(varFile)
+        self._updateCallSetIds(var_file)
         # self._updateVariantAnnotationSets(varFile, dataUrl)
 
     def _update_metadata(self, var_file):
         if len(self.variant_set_metadata) == 0:
             self.variant_set_metadata = self._getMetadataFromVcf(var_file)
+
+
+    def _updateCallSetIds(self, variantFile):
+        """
+        Updates the call set IDs based on the specified variant file.
+        """
+        if len(self.call_sets) == 0:
+            for sample in variantFile.header.samples:
+                call_set = registry.CallSet(name=sample, sample_id=sample)
+                self.call_sets.append(call_set)
+        # TODO check the callsets are already in here as required, or throw
+        # an error.
 
     def _getMetadataFromVcf(self, varFile):
         # TODO document this function and refactor it to use snake_case and

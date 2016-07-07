@@ -18,6 +18,16 @@ import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
 
 
+def datetime_to_milliseconds(t):
+    """
+    Converts the specified datetime object into its appropriate protocol
+    value. This is the number of milliseconds from the epoch.
+    """
+    epoch = datetime.datetime.utcfromtimestamp(0)
+    delta = t - epoch
+    millis = delta.total_seconds() * 1000
+    return int(millis)
+
 
 def get_external_id():
     # TODO make this use SystemRandom and make a table specific prefix.
@@ -28,6 +38,13 @@ def create_id_column():
     return sqlalchemy.Column(
         sqlalchemy.Integer, primary_key=True, autoincrement=False,
         default=get_external_id)
+
+
+def create_timestamp_column():
+    # TODO we should add a update default here as well.
+    return sqlalchemy.Column(
+        sqlalchemy.DateTime, nullable=False,
+        default=datetime.datetime.now())
 
 
 SqlAlchemyBase = sqlalchemy.ext.declarative.declarative_base()
@@ -182,14 +199,58 @@ class VariantSetMetadata(SqlAlchemyBase):
         ret.description = self.description
         return ret
 
+# There is a many-to-many association between VariantSets and CallSets,
+# so we need an association table.
+call_set_association_table = sqlalchemy.Table(
+    'call_set_association', SqlAlchemyBase.metadata,
+    sqlalchemy.Column(
+        'variant_set_id', sqlalchemy.Integer,
+        sqlalchemy.ForeignKey('VariantSet.id')),
+    sqlalchemy.Column(
+        'call_set_id', sqlalchemy.Integer,
+        sqlalchemy.ForeignKey('CallSet.id')))
+
+
+class CallSet(SqlAlchemyBase):
+    __tablename__ = 'CallSet'
+
+    id = create_id_column()
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    sample_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    creation_timestamp = create_timestamp_column()
+    update_timestamp = create_timestamp_column()
+    variant_sets = orm.relationship(
+        "VariantSet", secondary=call_set_association_table,
+        back_populates="call_sets")
+
+    def get_protobuf(self):
+        ret = protocol.CallSet()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.sample_id = self.sample_id
+        ret.created = datetime_to_milliseconds(self.creation_timestamp)
+        ret.updated = datetime_to_milliseconds(self.update_timestamp)
+        ret.variant_set_ids.extend(str(vs.id) for vs in self.variant_sets)
+        # TODO create a generic Info table that can hold these values
+        # for a variety of different tables. Or it may be simpler to create
+        # a per-class table.
+        # for key in self._info:
+        #     gaCallSet.info[key].values.extend(_encodeValue(self._info[key]))
+        return ret
+
+    def __init__(self, name=None, sample_id=None):
+        self.name = name
+        self.sample_id = sample_id
+
 
 class VariantSet(SqlAlchemyBase):
     __tablename__ = 'VariantSet'
 
     id = create_id_column()
     name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-    created = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False)
-    updated = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False)
+    creation_timestamp = create_timestamp_column()
+    update_timestamp = create_timestamp_column()
+
     dataset_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
         nullable=False)
@@ -204,6 +265,9 @@ class VariantSet(SqlAlchemyBase):
 
     variant_set_metadata = orm.relationship(
         "VariantSetMetadata", cascade="all, delete, delete-orphan")
+    call_sets = orm.relationship(
+        "CallSet", secondary=call_set_association_table,
+        back_populates="variant_sets")
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
@@ -217,19 +281,18 @@ class VariantSet(SqlAlchemyBase):
 
     def __init__(self, name):
         self.name = name
-        self.created = datetime.datetime.now()
-        self.updated = datetime.datetime.now()
 
     def get_protobuf(self):
         ret = protocol.VariantSet()
         ret.id = str(self.id)
         ret.name = self.name
+        # ret.created = self.creation_timestamp
+        # ret.updated = self.update_timestamp
         ret.dataset_id = str(self.dataset_id)
         ret.reference_set_id = str(self.reference_set_id)
         metadata = [m.get_protobuf() for m in self.variant_set_metadata]
         ret.metadata.extend(metadata)
         return ret
-
 
 
 
@@ -262,7 +325,7 @@ class RegistryDb(object):
         """
         Opens this registry DB.
         """
-        self._engine = sqlalchemy.create_engine(self._db_url, echo=True)
+        self._engine = sqlalchemy.create_engine(self._db_url, echo=False)
         Session = orm.sessionmaker()
         Session.configure(bind=self._engine)
         self._session = Session()
@@ -357,6 +420,16 @@ class RegistryDb(object):
     # Object accessors by ID. These are run when the corresponding GET request
     # is received.
 
+    def get_call_set(self, id_):
+        """
+        Retuns the CallSet with the specified ID, or raises a
+        VariantSetNotFoundException if it does not exist.
+        """
+        result = self._session.query(CallSet).filter(CallSet.id == id_).first()
+        if result is None:
+            raise exceptions.CallSetNotFoundException(id_)
+        return result
+
     def get_variant_set(self, id_):
         """
         Retuns the VariantSet with the specified ID, or raises a
@@ -434,4 +507,15 @@ class RegistryDb(object):
         SearchVariantSets request.
         """
         query = self._session.query(VariantSet)
+        return query
+
+    def get_call_sets_search_query(self, request):
+        """
+        Returns the query object representing all the rows in the specified
+        SearchCallSets request.
+        """
+        query = self._session.query(CallSet)
+        query = query.filter(CallSet.variant_sets.any(id=request.variant_set_id))
+        if request.name:
+            query = query.filter(CallSet.name == request.name)
         return query
