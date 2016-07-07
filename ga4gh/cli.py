@@ -32,12 +32,15 @@ import ga4gh.exceptions as exceptions
 # import ga4gh.datarepo as datarepo
 import ga4gh.protocol as protocol
 
-# mport ga4gh.datamodel.bio_metadata as biodata
+import ga4gh.registry as registry
+import ga4gh.datasource.htslib as htslib
+
 # import ga4gh.datamodel.reads as reads
 # import ga4gh.datamodel.variants as variants
 # import ga4gh.datamodel.references as references
 # import ga4gh.datamodel.sequenceAnnotations as sequenceAnnotations
 # import ga4gh.datamodel.datasets as datasets
+# import ga4gh.datamodel.bio_metadata as biodata
 # import ga4gh.datamodel.ontologies as ontologies
 
 
@@ -1685,7 +1688,7 @@ class RepoManager(object):
     def __init__(self, args):
         self._args = args
         self._registry_url = args.registry_url
-        self._registry = datarepo.RegistryDb(self._registry_url)
+        self._registry = registry.RegistryDb(self._registry_url)
 
     def _confirmDelete(self, objectType, name, func):
         if self._args.force:
@@ -1736,7 +1739,7 @@ class RepoManager(object):
         """
         self._openRepo()
         # TODO this is _very_ crude. We need much more options and detail here.
-        self._registry.printSummary()
+        self._registry.print_summary()
 
     def verify(self):
         """
@@ -1765,7 +1768,7 @@ class RepoManager(object):
         Adds a new dataset into this repo.
         """
         self._openRepo()
-        dataset = datasets.Dataset(self._args.datasetName)
+        dataset = registry.Dataset(self._args.datasetName)
         dataset.description = self._args.description
         self._registry.add_dataset(dataset)
         self._registry.close()
@@ -1780,7 +1783,7 @@ class RepoManager(object):
             self._args.filePath, self._args.relativePath)
         if name is None:
             name = getNameFromPath(self._args.filePath)
-        reference_set = references.HtslibReferenceSet(name, file_path)
+        reference_set = htslib.HtslibReferenceSet(name, file_path)
         reference_set.description = self._args.description
         reference_set.ncbi_taxon_id = self._args.ncbi_taxon_id
         reference_set.is_derived = self._args.is_derived
@@ -1797,7 +1800,7 @@ class RepoManager(object):
         Adds a new ReadGroupSet into this repo.
         """
         self._openRepo()
-        dataset = self._registry.getDatasetByName(self._args.datasetName)
+        dataset = self._registry.get_dataset_by_name(self._args.datasetName)
         dataUrl = self._args.dataFile
         indexFile = self._args.indexFile
         parsed = urlparse.urlparse(dataUrl)
@@ -1815,15 +1818,15 @@ class RepoManager(object):
         name = self._args.name
         if self._args.name is None:
             name = getNameFromPath(dataUrl)
-        readGroupSet = reads.HtslibReadGroupSet(dataset, name)
-        readGroupSet.populateFromFile(dataUrl, indexFile)
+        readGroupSet = htslib.HtslibReadGroupSet(name, dataUrl, indexFile)
         referenceSetName = self._args.referenceSetName
         if referenceSetName is None:
             # Try to find a reference set name from the BAM header.
-            referenceSetName = readGroupSet.getBamHeaderReferenceSetName()
-        referenceSet = self._registry.getReferenceSetByName(referenceSetName)
-        readGroupSet.setReferenceSet(referenceSet)
-        self._updateRepo(self._registry.insertReadGroupSet, readGroupSet)
+            referenceSetName = readGroupSet.assembly_identifier
+        referenceSet = self._registry.get_reference_set_by_name(referenceSetName)
+        readGroupSet.reference_set = referenceSet
+        readGroupSet.dataset = dataset
+        self._registry.add_read_group_set(readGroupSet)
 
     def addVariantSet(self):
         """
@@ -1877,20 +1880,18 @@ class RepoManager(object):
             indexFiles = [filename + indexSuffix for filename in dataUrls]
         indexFiles = map(lambda url: self._getFilePath(
             url, self._args.relativePath), indexFiles)
-        variant_set = variants.HtslibVariantSet(name, dataUrls, indexFiles)
+        variant_set = htslib.HtslibVariantSet(name, dataUrls, indexFiles)
         # Get the reference set that is associated with the variant set.
         referenceSetName = self._args.referenceSetName
-        if referenceSetName is None:
-            # Try to find a reference set name from the VCF header.
-            referenceSetName = variant_set.getVcfHeaderReferenceSetName()
+        # TODO read the reference set name from the VCF header.
         if referenceSetName is None:
             raise exceptions.RepoManagerException(
                 "Cannot infer the ReferenceSet from the VCF header. Please "
                 "specify the ReferenceSet to associate with this "
                 "VariantSet using the --referenceSetName option")
         reference_set = self._registry.get_reference_set_by_name(referenceSetName)
-        variant_set.reference_set_id = reference_set.id
-
+        variant_set.reference_set = reference_set
+        variant_set.dataset = dataset
         self._registry.add_variant_set(variant_set)
 
         # # Now check for annotations

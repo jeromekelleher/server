@@ -378,6 +378,8 @@ class Experiment(SqlAlchemyBase):
         self.library = library
         self.platform_unit = platform_unit
         self.run_time = run_time
+        self.creation_timestamp = datetime.datetime.now()
+        self.update_timestamp = datetime.datetime.now()
 
     def update_protobuf(self, experiment):
         experiment.id = str(self.id)
@@ -437,6 +439,8 @@ class ReadGroup(SqlAlchemyBase):
         self.description = ""
         self.predicted_insert_size = 0
         self.read_stats = ReadStats()
+        self.creation_timestamp = datetime.datetime.now()
+        self.update_timestamp = datetime.datetime.now()
 
     def get_protobuf(self):
         ret = protocol.ReadGroup()
@@ -567,7 +571,7 @@ class RegistryDb(object):
         Drops all tables in the DB.
         """
         self.open()
-        metadata = datamodel.SqlAlchemyBase.metadata
+        metadata = SqlAlchemyBase.metadata
         metadata.drop_all(self._engine)
         self.close()
 
@@ -579,6 +583,11 @@ class RegistryDb(object):
         metadata.drop_all(self._engine)
         metadata.create_all(self._engine)
 
+    def print_summary(self):
+        """
+        Prints out a summary of the registry.
+        """
+        print("TODO")
 
     # Top level API to add objects to the data repository.
 
@@ -643,6 +652,29 @@ class RegistryDb(object):
         if result is None:
             raise exceptions.ReferenceSetNameNotFoundException(name)
         return result
+
+    def get_variant_set_by_name(self, dataset_name, name):
+        """
+        Returns the variant_set with the specified name from the dataset
+        with the specified name.
+        """
+        result = self._session.query(VariantSet).filter(
+            Dataset.name == dataset_name and VariantSet.name == name).first()
+        if result is None:
+            raise exceptions.VariantSetNameNotFoundException(name)
+        return result
+
+    def get_read_group_set_by_name(self, dataset_name, name):
+        """
+        Returns the read_group_set with the specified name from the dataset
+        with the specified name.
+        """
+        result = self._session.query(ReadGroupSet).filter(
+            Dataset.name == dataset_name and ReadGroupSet.name == name).first()
+        if result is None:
+            raise exceptions.ReadGroupSetNameNotFoundException(name)
+        return result
+
 
     # Object accessors by ID. These are run when the corresponding GET request
     # is received.

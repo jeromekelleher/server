@@ -71,28 +71,34 @@ for rs in db.get_reference_sets():
 
 # db.add_read_group_set(rgs)
 
+# bam = "tests/data/datasets/dataset1/reads/wgEncodeUwRepliSeqBg02esG1bAlnRep1_sample.bam"
+# rgs = htslib.HtslibReadGroupSet("wg", bam, bam + ".bai")
+# rgs.dataset = dataset
+# rgs.reference_set = rs1
+# db.add_read_group_set(rgs)
+
 bam = "tests/data/datasets/dataset1/reads/HG00096.mapped.ILLUMINA.bwa.GBR.low_coverage.20120522.bam"
 rgs = htslib.HtslibReadGroupSet("HG0096", bam, bam + ".bai")
 rgs.dataset = dataset
 rgs.reference_set = rs1
 db.add_read_group_set(rgs)
 
-bam = "1kg-data/NA12878.mapped.ILLUMINA.bwa.CEU.low_coverage.20121211.bam"
-rgs = htslib.HtslibReadGroupSet("NA12878", bam, bam + ".bai")
-rgs.dataset = dataset
-rgs.reference_set = rs1
-db.add_read_group_set(rgs)
+# bam = "1kg-data/NA12878.mapped.ILLUMINA.bwa.CEU.low_coverage.20121211.bam"
+# rgs = htslib.HtslibReadGroupSet("NA12878", bam, bam + ".bai")
+# rgs.dataset = dataset
+# rgs.reference_set = rs1
+# db.add_read_group_set(rgs)
 
-bam = "1kg-data/NA21144.mapped.ILLUMINA.bwa.GIH.low_coverage.20130415.bam"
-rgs = htslib.HtslibReadGroupSet("NA21144", bam, bam + ".bai")
-rgs.dataset = dataset
-rgs.reference_set = rs1
-db.add_read_group_set(rgs)
+# bam = "1kg-data/NA21144.mapped.ILLUMINA.bwa.GIH.low_coverage.20130415.bam"
+# rgs = htslib.HtslibReadGroupSet("NA21144", bam, bam + ".bai")
+# rgs.dataset = dataset
+# rgs.reference_set = rs1
+# db.add_read_group_set(rgs)
 
 
 
-print(rgs)
-# print(rgs.dataset)
-print(rgs.get_protobuf())
+# print(rgs)
+# # print(rgs.dataset)
+# print(rgs.get_protobuf())
 
 db.close()

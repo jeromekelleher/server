@@ -21,10 +21,10 @@ import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
 
 
-DEFAULT_REFERENCESET_NAME = "Default"
+DEFAULT_READGROUP_NAME = "Default_RG"
 """
-This is the name used for any reference set referred to in a BAM
-file that does not provide the 'AS' tag in the @SQ header.
+This is the name used for the default read group created when there
+are no RG headers in a BAM file.
 """
 
 
@@ -290,7 +290,6 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
 
     def __init__(self, name, data_urls, index_urls):
         super(HtslibVariantSet, self).__init__(name)
-        print("creating htslib variant set for ", data_urls, index_urls)
         self.vcf_files = []
         for data_url, index_file in zip(data_urls, index_urls):
             var_file = pysam.VariantFile(data_url, index_filename=index_file)
@@ -507,27 +506,49 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         raise exceptions.ObjectNotFoundException(compoundId)
 
 
-    def getVcfHeaderReferenceSetName(self):
-        """
-        Returns the name of the reference set from the VCF header.
-        """
-        # TODO implemenent
-        return None
-
 ##################################################
 #
 # Reads
 #
 ##################################################
 
-class AlignmentDataMixin(PysamMixin):
+
+class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
+    __tablename__ = 'HtslibReadGroupSet'
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroupSet.id'),
+        primary_key=True)
+    data_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    index_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    assembly_identifier = sqlalchemy.Column(sqlalchemy.String)
     """
-    Mixin class that provides methods for getting read alignments
-    from bam files
+    The Assembly Identifier read from the BAM file header.
     """
 
+    __mapper_args__ = {
+        'polymorphic_identity':'HtslibReadGroupSet',
+    }
 
-    def open_file(self, data_url, index_url):
+    def __init__(self, name, data_url, index_url):
+        super(HtslibReadGroupSet, self).__init__(name)
+        self.data_url = data_url
+        self.index_url = index_url
+        alignment_file = self.__open_file(data_url, index_url)
+        try:
+            self.__read_alignment_file(alignment_file)
+        finally:
+            alignment_file.close()
+
+    def __get_read_group(self, name):
+        """
+        Returns the read group associated with the specified name. The
+        name must be bytes encoded _not_ unicode.
+        """
+        # TODO avoid creating the dictionary here.
+        name_map = {rg.name.encode(): rg for rg in self.read_groups}
+        return name_map[name]
+
+    def __open_file(self, data_url, index_url):
         # We need to check to see if the path exists here as pysam does
         # not throw an error if the index is missing.
         if not os.path.exists(index_url):
@@ -539,116 +560,69 @@ class AlignmentDataMixin(PysamMixin):
             # an index file... may also happen in other cases?
             raise exceptions.DataException(exception.message)
 
-
-
-class HtslibReadGroup(registry.ReadGroup, AlignmentDataMixin):
-    __tablename__ = 'HtslibReadGroup'
-    id = sqlalchemy.Column(
-        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroup.id'),
-        primary_key=True)
-
-    __mapper_args__ = {
-        'polymorphic_identity':'HtslibReadGroup',
-    }
-
-    def populateFromHeader(self, readGroupHeader):
+    def __create_read_group(self, rg_header):
         """
-        Populate the instance variables using the specified SAM header.
+        Returns a new read group for the specified SAM RG rg_header.
         """
-        self.sample_id = readGroupHeader.get('SM', "")
-        self.description = readGroupHeader.get('DS', "")
-        if 'PI' in readGroupHeader:
-            self.predicted_insert_size = int(readGroupHeader['PI'])
-        self.experiment = registry.Experiment(
-            instrument_model=readGroupHeader.get('PL', ""),
-            sequencing_center=readGroupHeader.get('CN', ""),
-            description=readGroupHeader.get('DS', ""),
-            library=readGroupHeader.get('LB', ""),
-            platform_unit=readGroupHeader.get('PU', ""),
-            run_time=readGroupHeader.get('DT', "")
+        read_group = registry.ReadGroup(rg_header['ID'])
+        read_group.sample_id = rg_header.get('SM', "")
+        read_group.description = rg_header.get('DS', "")
+        read_group.predicted_insert_size = int(rg_header.get('PI', 0))
+        read_group.experiment = registry.Experiment(
+            instrument_model=rg_header.get('PL', ""),
+            sequencing_center=rg_header.get('CN', ""),
+            description=rg_header.get('DS', ""),
+            library=rg_header.get('LB', ""),
+            platform_unit=rg_header.get('PU', ""),
+            run_time=rg_header.get('DT', "")
         )
+        return read_group
 
-
-
-class HtslibReadGroupSet(registry.ReadGroupSet, AlignmentDataMixin):
-    __tablename__ = 'HtslibReadGroupSet'
-    id = sqlalchemy.Column(
-        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroupSet.id'),
-        primary_key=True)
-    data_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-    index_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-
-    __mapper_args__ = {
-        'polymorphic_identity':'HtslibReadGroupSet',
-    }
-
-    def __init__(self, name, data_url, index_url):
-        super(HtslibReadGroupSet, self).__init__(name)
-        self.data_url = data_url
-        self.index_url = index_url
-        alignment_file = self.open_file(data_url, index_url)
-        try:
-            self.__add_alignment_file(alignment_file)
-        finally:
-            alignment_file.close()
-        self.__check_state()
-
-    def get_read_group(self, name):
+    def __read_alignment_file(self, alignment_file):
         """
-        Returns the read group associated with the specified name. The
-        name must be bytes encoded _not_ unicode.
+        Populates the instance variables of this read group set
+        based on the specified pysam AlignmentFile instance.
         """
-        # TODO avoid creating the dictionary here.
-        name_map = {rg.name.encode(): rg for rg in self.read_groups}
-        return name_map[name]
-
-    def _setHeaderFields(self, samFile):
-        # TODO when we can get the PP values from the header, make a map
-        # from the SAM IDs to our external IDs and map this to previous
-        # program ID.
-        if 'PG' in samFile.header:
-            htslibPrograms = samFile.header['PG']
-            for htslibProgram in htslibPrograms:
-                program = registry.Program()
-                # program.id = htslibProgram['ID']
-                program.command_line = htslibProgram.get('CL', "")
-                program.name = htslibProgram.get('PN', "")
-                # program.prev_program_id = htslibProgram.get('PP', "")
-                program.version = htslibProgram.get('VN', "")
-                self.programs.append(program)
-
-    def __add_alignment_file(self, samFile):
-        self._setHeaderFields(samFile)
-        if 'RG' not in samFile.header or len(samFile.header['RG']) == 0:
-            #  TODO fix this
-            readGroup = HtslibReadGroup(self.defaultReadGroupName)
-            self.addReadGroup(readGroup)
+        header = alignment_file.header
+        # Create the read groups.
+        if 'RG' not in header or len(header['RG']) == 0:
+            # If there is no read group header information, we assume there
+            # is a single read group in the file, and give the default name
+            read_group = registry.ReadGroup(DEFAULT_READGROUP_NAME)
+            self.read_groups.append(read_group)
         else:
-            for readGroupHeader in samFile.header['RG']:
-                readGroup = HtslibReadGroup(readGroupHeader['ID'])
-                readGroup.populateFromHeader(readGroupHeader)
-                # TODO set read stats for the read groups.
-                self.read_groups.append(readGroup)
+            for rg_header in header['RG']:
+                self.read_groups.append(self.__create_read_group(rg_header))
+        # Create the Programs for this ReadGroupSet.
+        if 'PG' in header:
+            for htslib_program in header['PG']:
+                program = registry.Program()
+                program.command_line = htslib_program.get('CL', "")
+                program.name = htslib_program.get('PN', "")
+                # TODO when we can get the PP values from the header, make a
+                # map # from the SAM IDs to our external IDs and map this
+                # to previous program ID.
+                # htslib_id = htslibProgram['ID']
+                # htslib_prev_if  = htslibProgram.get('PP', "")
+                program.version = htslib_program.get('VN', "")
+                self.programs.append(program)
+        # Get the read stats. We cannot currently get the total number
+        # of bases, as pysam does not provide it.
         self.read_stats = registry.ReadStats(
-            aligned_read_count=samFile.mapped,
-            unaligned_read_count=samFile.unmapped)
+            aligned_read_count=alignment_file.mapped,
+            unaligned_read_count=alignment_file.unmapped)
+        # Get the reference information from the header.
+        self.assembly_identifier = None
+        for sq_header in header['SQ']:
+            if 'AS' not in sq_header:
+                sq_header = parseMalformedBamHeader(sq_header)
+            name = sq_header.get('AS', None)
+            if self.assembly_identifier is None:
+                self.assembly_identifier = name
+            elif self.assembly_identifier != name:
+                raise exceptions.MultipleReferenceSetsInReadGroupSet(
+                    self.data_url, name, self.assembly_identifier)
 
-        # self._bamHeaderReferenceSetName = None
-        # for referenceInfo in samFile.header['SQ']:
-        #     if 'AS' not in referenceInfo:
-        #         infoDict = parseMalformedBamHeader(referenceInfo)
-        #     else:
-        #         infoDict = referenceInfo
-        #     name = infoDict.get('AS', DEFAULT_REFERENCESET_NAME)
-        #     if self._bamHeaderReferenceSetName is None:
-        #         self._bamHeaderReferenceSetName = name
-        #     elif self._bamHeaderReferenceSetName != name:
-        #         raise exceptions.MultipleReferenceSetsInReadGroupSet(
-        #             self._dataUrl, name, self._bamFileReferenceName)
-
-
-    def __check_state(self):
-        pass
 
 
     def convertReadAlignment(self, samFile, read, reference):
@@ -691,7 +665,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, AlignmentDataMixin):
                 read_group_name = value
             else:
                 ret.info[key].values.add().string_value = str(value)
-        ret.read_group_id = str(self.get_read_group(read_group_name).id)
+        ret.read_group_id = str(self.__get_read_group(read_group_name).id)
         if SamFlags.isFlagSet(read.flag, SamFlags.MATE_UNMAPPED):
             ret.next_mate_position.Clear()
         else:
@@ -740,7 +714,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, AlignmentDataMixin):
                 request.page_token)
             start = int(compound_id.position)
         start, end = self.sanitizeAlignmentFileFetch(start, end)
-        alignment_file = self.open_file(self.data_url, self.index_url)
+        alignment_file = self.__open_file(self.data_url, self.index_url)
         read_alignments = alignment_file.fetch(reference_name, start, end)
         if request.page_token:
             # Skip ahead until we see the read with this ID.
