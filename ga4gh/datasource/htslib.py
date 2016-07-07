@@ -6,9 +6,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import random
-import hashlib
 import collections
+import hashlib
+import os
+import random
 
 import pysam
 import sqlalchemy
@@ -18,6 +19,14 @@ import google.protobuf.struct_pb2 as struct_pb2
 import ga4gh.registry as registry
 import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
+
+
+DEFAULT_REFERENCESET_NAME = "Default"
+"""
+This is the name used for any reference set referred to in a BAM
+file that does not provide the 'AS' tag in the @SQ header.
+"""
+
 
 _nothing = object()
 
@@ -35,6 +44,80 @@ def _encodeValue(value):
         return [struct_pb2.Value(string_value=str(v)) for v in value]
     else:
         return [struct_pb2.Value(string_value=str(value))]
+
+
+def parseMalformedBamHeader(headerDict):
+    """
+    Parses the (probably) intended values out of the specified
+    BAM header dictionary, which is incompletely parsed by pysam.
+    This is caused by some tools incorrectly using spaces instead
+    of tabs as a seperator.
+    """
+    headerString = " ".join(
+        "{}:{}".format(k, v) for k, v in headerDict.items() if k != 'CL')
+    ret = {}
+    for item in headerString.split():
+        key, value = item.split(":", 1)
+        # build up dict, casting everything back to original type
+        ret[key] = type(headerDict.get(key, ""))(value)
+    if 'CL' in headerDict:
+        ret['CL'] = headerDict['CL']
+    return ret
+
+
+class SamCigar(object):
+    """
+    Utility class for working with SAM CIGAR strings
+    """
+    # see http://pysam.readthedocs.org/en/latest/api.html
+    # #pysam.AlignedSegment.cigartuples
+    cigarStrings = [
+        protocol.CigarUnit.ALIGNMENT_MATCH,
+        protocol.CigarUnit.INSERT,
+        protocol.CigarUnit.DELETE,
+        protocol.CigarUnit.SKIP,
+        protocol.CigarUnit.CLIP_SOFT,
+        protocol.CigarUnit.CLIP_HARD,
+        protocol.CigarUnit.PAD,
+        protocol.CigarUnit.SEQUENCE_MATCH,
+        protocol.CigarUnit.SEQUENCE_MISMATCH,
+    ]
+
+    @classmethod
+    def ga2int(cls, value):
+        for i, cigarString in enumerate(cls.cigarStrings):
+            if value == cigarString:
+                return i
+
+    @classmethod
+    def int2ga(cls, value):
+        return cls.cigarStrings[value]
+
+
+class SamFlags(object):
+    """
+    Utility class for working with SAM flags
+    """
+    READ_PAIRED = 0x1
+    READ_PROPER_PAIR = 0x2
+    READ_UNMAPPED = 0x4
+    MATE_UNMAPPED = 0x8
+    READ_REVERSE_STRAND = 0x10
+    MATE_REVERSE_STRAND = 0x20
+    FIRST_IN_PAIR = 0x40
+    SECOND_IN_PAIR = 0x80
+    SECONDARY_ALIGNMENT = 0x100
+    FAILED_QUALITY_CHECK = 0x200
+    DUPLICATE_READ = 0x400
+    SUPPLEMENTARY_ALIGNMENT = 0x800
+
+    @staticmethod
+    def isFlagSet(flagAttr, flag):
+        return flagAttr & flag == flag
+
+    @staticmethod
+    def setFlag(flagAttr, flag):
+        return flagAttr | flag
 
 
 
@@ -399,7 +482,7 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
                 response_builder.addValue(variant)
                 if response_builder.isFull():
                     break
-            if response_builder.isFull():
+            if response_builder.isFull() and not is_empty_iter(cursor):
                 response_builder.setNextPageToken(variant.id)
 
     def run_get_variant(self, compound_id):
@@ -430,6 +513,251 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         """
         # TODO implemenent
         return None
+
+##################################################
+#
+# Reads
+#
+##################################################
+
+class AlignmentDataMixin(PysamMixin):
+    """
+    Mixin class that provides methods for getting read alignments
+    from bam files
+    """
+
+
+    def open_file(self, data_url, index_url):
+        # We need to check to see if the path exists here as pysam does
+        # not throw an error if the index is missing.
+        if not os.path.exists(index_url):
+            raise exceptions.FileOpenFailedException(index_url)
+        try:
+            return pysam.AlignmentFile(data_url, filepath_index=index_url)
+        except IOError as exception:
+            # IOError thrown when the index file passed in is not actually
+            # an index file... may also happen in other cases?
+            raise exceptions.DataException(exception.message)
+
+
+
+class HtslibReadGroup(registry.ReadGroup, AlignmentDataMixin):
+    __tablename__ = 'HtslibReadGroup'
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroup.id'),
+        primary_key=True)
+
+    __mapper_args__ = {
+        'polymorphic_identity':'HtslibReadGroup',
+    }
+
+    def populateFromHeader(self, readGroupHeader):
+        """
+        Populate the instance variables using the specified SAM header.
+        """
+        self.sample_id = readGroupHeader.get('SM', "")
+        self.description = readGroupHeader.get('DS', "")
+        if 'PI' in readGroupHeader:
+            self.predicted_insert_size = int(readGroupHeader['PI'])
+        self.experiment = registry.Experiment(
+            instrument_model=readGroupHeader.get('PL', ""),
+            sequencing_center=readGroupHeader.get('CN', ""),
+            description=readGroupHeader.get('DS', ""),
+            library=readGroupHeader.get('LB', ""),
+            platform_unit=readGroupHeader.get('PU', ""),
+            run_time=readGroupHeader.get('DT', "")
+        )
+
+
+
+class HtslibReadGroupSet(registry.ReadGroupSet, AlignmentDataMixin):
+    __tablename__ = 'HtslibReadGroupSet'
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroupSet.id'),
+        primary_key=True)
+    data_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    index_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    __mapper_args__ = {
+        'polymorphic_identity':'HtslibReadGroupSet',
+    }
+
+    def __init__(self, name, data_url, index_url):
+        super(HtslibReadGroupSet, self).__init__(name)
+        self.data_url = data_url
+        self.index_url = index_url
+        alignment_file = self.open_file(data_url, index_url)
+        try:
+            self.__add_alignment_file(alignment_file)
+        finally:
+            alignment_file.close()
+        self.__check_state()
+
+    def get_read_group(self, name):
+        """
+        Returns the read group associated with the specified name. The
+        name must be bytes encoded _not_ unicode.
+        """
+        # TODO avoid creating the dictionary here.
+        name_map = {rg.name.encode(): rg for rg in self.read_groups}
+        return name_map[name]
+
+    def _setHeaderFields(self, samFile):
+        # TODO when we can get the PP values from the header, make a map
+        # from the SAM IDs to our external IDs and map this to previous
+        # program ID.
+        if 'PG' in samFile.header:
+            htslibPrograms = samFile.header['PG']
+            for htslibProgram in htslibPrograms:
+                program = registry.Program()
+                # program.id = htslibProgram['ID']
+                program.command_line = htslibProgram.get('CL', "")
+                program.name = htslibProgram.get('PN', "")
+                # program.prev_program_id = htslibProgram.get('PP', "")
+                program.version = htslibProgram.get('VN', "")
+                self.programs.append(program)
+
+    def __add_alignment_file(self, samFile):
+        self._setHeaderFields(samFile)
+        if 'RG' not in samFile.header or len(samFile.header['RG']) == 0:
+            #  TODO fix this
+            readGroup = HtslibReadGroup(self.defaultReadGroupName)
+            self.addReadGroup(readGroup)
+        else:
+            for readGroupHeader in samFile.header['RG']:
+                readGroup = HtslibReadGroup(readGroupHeader['ID'])
+                readGroup.populateFromHeader(readGroupHeader)
+                # TODO set read stats for the read groups.
+                self.read_groups.append(readGroup)
+        self.read_stats = registry.ReadStats(
+            aligned_read_count=samFile.mapped,
+            unaligned_read_count=samFile.unmapped)
+
+        # self._bamHeaderReferenceSetName = None
+        # for referenceInfo in samFile.header['SQ']:
+        #     if 'AS' not in referenceInfo:
+        #         infoDict = parseMalformedBamHeader(referenceInfo)
+        #     else:
+        #         infoDict = referenceInfo
+        #     name = infoDict.get('AS', DEFAULT_REFERENCESET_NAME)
+        #     if self._bamHeaderReferenceSetName is None:
+        #         self._bamHeaderReferenceSetName = name
+        #     elif self._bamHeaderReferenceSetName != name:
+        #         raise exceptions.MultipleReferenceSetsInReadGroupSet(
+        #             self._dataUrl, name, self._bamFileReferenceName)
+
+
+    def __check_state(self):
+        pass
+
+
+    def convertReadAlignment(self, samFile, read, reference):
+        """
+        Convert a pysam ReadAlignment to a GA4GH ReadAlignment
+        """
+        # TODO fill out remaining fields
+        # TODO refine in tandem with code in converters module
+        ret = protocol.ReadAlignment()
+        # ret.fragmentId = 'TODO'
+        ret.aligned_quality.extend(read.query_qualities)
+        ret.aligned_sequence = read.query_sequence
+        if SamFlags.isFlagSet(read.flag, SamFlags.READ_UNMAPPED):
+            ret.ClearField("alignment")
+        else:
+            ret.alignment.CopyFrom(protocol.LinearAlignment())
+            ret.alignment.mapping_quality = read.mapping_quality
+            ret.alignment.position.CopyFrom(protocol.Position())
+            ret.alignment.position.reference_name = samFile.getrname(
+                read.reference_id)
+            ret.alignment.position.position = read.reference_start
+            ret.alignment.position.strand = protocol.POS_STRAND
+            if SamFlags.isFlagSet(read.flag, SamFlags.READ_REVERSE_STRAND):
+                ret.alignment.position.strand = protocol.NEG_STRAND
+            for operation, length in read.cigar:
+                gaCigarUnit = ret.alignment.cigar.add()
+                gaCigarUnit.operation = SamCigar.int2ga(operation)
+                gaCigarUnit.operation_length = length
+                gaCigarUnit.reference_sequence = ""  # TODO fix this!
+        ret.duplicate_fragment = SamFlags.isFlagSet(
+            read.flag, SamFlags.DUPLICATE_READ)
+        ret.failed_vendor_quality_checks = SamFlags.isFlagSet(
+            read.flag, SamFlags.FAILED_QUALITY_CHECK)
+        ret.fragment_length = read.template_length
+        ret.fragment_name = read.query_name
+        # TODO default read group name
+        read_group_name = None
+        for key, value in read.tags:
+            if key == b"RG":
+                read_group_name = value
+            else:
+                ret.info[key].values.add().string_value = str(value)
+        ret.read_group_id = str(self.get_read_group(read_group_name).id)
+        if SamFlags.isFlagSet(read.flag, SamFlags.MATE_UNMAPPED):
+            ret.next_mate_position.Clear()
+        else:
+            ret.next_mate_position.Clear()
+            if read.next_reference_id != -1:
+                ret.next_mate_position.reference_name = samFile.getrname(
+                    read.next_reference_id)
+            else:
+                ret.next_mate_position.reference_name = ""
+            ret.next_mate_position.position = read.next_reference_start
+            ret.next_mate_position.strand = protocol.POS_STRAND
+            if SamFlags.isFlagSet(read.flag, SamFlags.MATE_REVERSE_STRAND):
+                ret.next_mate_position.strand = protocol.NEG_STRAND
+        if SamFlags.isFlagSet(read.flag, SamFlags.READ_PAIRED):
+            ret.number_reads = 2
+        else:
+            ret.number_reads = 1
+        ret.read_number = -1
+        if SamFlags.isFlagSet(read.flag, SamFlags.FIRST_IN_PAIR):
+            if SamFlags.isFlagSet(read.flag, SamFlags.SECOND_IN_PAIR):
+                ret.read_number = 2
+            else:
+                ret.read_number = 0
+        elif SamFlags.isFlagSet(read.flag, SamFlags.SECOND_IN_PAIR):
+            ret.read_number = 1
+        ret.improper_placement = not SamFlags.isFlagSet(
+            read.flag, SamFlags.READ_PROPER_PAIR)
+        ret.secondary_alignment = SamFlags.isFlagSet(
+            read.flag, SamFlags.SECONDARY_ALIGNMENT)
+        ret.supplementary_alignment = SamFlags.isFlagSet(
+            read.flag, SamFlags.SUPPLEMENTARY_ALIGNMENT)
+        # TODO is this really a unique ID for this particular read? Should we
+        # not hash something as well to be certain?
+        compound_id = registry.ReadAlignmentCompoundId(
+            None, ret.read_group_id, str(reference.id),
+            str(ret.alignment.position.position), ret.fragment_name)
+        ret.id = str(compound_id)
+        return ret
+
+    def run_search(self, request, reference, read_groups, response_builder):
+        start = request.start
+        end = request.end
+        reference_name = reference.name.encode()
+        if request.page_token:
+            compound_id = registry.ReadAlignmentCompoundId.parse(
+                request.page_token)
+            start = int(compound_id.position)
+        start, end = self.sanitizeAlignmentFileFetch(start, end)
+        alignment_file = self.open_file(self.data_url, self.index_url)
+        read_alignments = alignment_file.fetch(reference_name, start, end)
+        if request.page_token:
+            # Skip ahead until we see the read with this ID.
+            for alignment in read_alignments:
+                ga_alignment = self.convertReadAlignment(
+                    alignment_file, alignment, reference)
+                if ga_alignment.id == request.page_token:
+                    break
+        for alignment in read_alignments:
+            ga_alignment = self.convertReadAlignment(
+                alignment_file, alignment, reference)
+            if ga_alignment.read_group_id in request.read_group_ids:
+                response_builder.addValue(ga_alignment)
+            if response_builder.isFull():
+                break
+        if response_builder.isFull() and not is_empty_iter(read_alignments):
+            response_builder.setNextPageToken(ga_alignment.id)
 
 
 class PysamFileHandleCache(object):

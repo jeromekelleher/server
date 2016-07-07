@@ -270,14 +270,12 @@ class VariantSet(SqlAlchemyBase):
     dataset_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
         nullable=False)
-    # dataset = orm.relationship(
-    #     "Dataset", back_populates="dataset", single_parent=True,
-    #     cascade="all, delete, delete-orphan")
+    dataset = orm.relationship(
+        "Dataset",  cascade="all, delete, delete-orphan", single_parent=True)
     reference_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
         nullable=False)
-    # reference_set = orm.relationship(
-    #     "ReferenceSet", back_populates="reference_set")
+    reference_set = orm.relationship("ReferenceSet", single_parent=True)
 
     variant_set_metadata = orm.relationship(
         "VariantSetMetadata", cascade="all, delete, delete-orphan")
@@ -302,14 +300,217 @@ class VariantSet(SqlAlchemyBase):
         ret = protocol.VariantSet()
         ret.id = str(self.id)
         ret.name = self.name
-        # ret.created = self.creation_timestamp
-        # ret.updated = self.update_timestamp
         ret.dataset_id = str(self.dataset_id)
         ret.reference_set_id = str(self.reference_set_id)
         metadata = [m.get_protobuf() for m in self.variant_set_metadata]
         ret.metadata.extend(metadata)
         return ret
 
+
+
+class ReadStats(SqlAlchemyBase):
+    __tablename__ = 'ReadStats'
+
+    id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
+    aligned_read_count = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+    unaligned_read_count = sqlalchemy.Column(
+        sqlalchemy.Integer, nullable=False)
+    base_count = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+
+    def __init__(
+        self, aligned_read_count=0, unaligned_read_count=0, base_count=0):
+        self.aligned_read_count = aligned_read_count
+        self.unaligned_read_count = unaligned_read_count
+        self.base_count = base_count
+
+    def update_protobuf(self, stats):
+        stats.aligned_read_count = self.aligned_read_count
+        stats.unaligned_read_count = self.unaligned_read_count
+        stats.base_count = self.base_count
+
+class Program(SqlAlchemyBase):
+    __tablename__ = 'Program'
+
+    id = create_id_column()
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    version = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    command_line = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    prev_program_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    read_group_set_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReadGroupSet.id"),
+        nullable=False)
+
+    def __init__(
+        self, name="", version="", command_line="", prev_program_id=""):
+        self.name = name
+        self.version = version
+        self.command_line = command_line
+        self.prev_program_id = prev_program_id
+
+    def get_protobuf(self):
+        ret = protocol.ReadGroup.Program()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.version = self.version
+        ret.command_line = self.command_line
+        ret.prev_program_id = self.prev_program_id
+        return ret
+
+class Experiment(SqlAlchemyBase):
+    __tablename__ = 'Experiment'
+
+    id = create_id_column()
+    creation_timestamp = create_timestamp_column()
+    update_timestamp = create_timestamp_column()
+    instrument_model = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    sequencing_center = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    library = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    platform_unit = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    run_time = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    def __init__(
+        self, instrument_model="", sequencing_center="", description="",
+        library="", platform_unit="", run_time=""):
+        self.instrument_model = instrument_model
+        self.sequencing_center = sequencing_center
+        self.description = description
+        self.library = library
+        self.platform_unit = platform_unit
+        self.run_time = run_time
+
+    def update_protobuf(self, experiment):
+        experiment.id = str(self.id)
+        experiment.instrument_model = self.instrument_model
+        experiment.sequencing_center = self.sequencing_center
+        experiment.description = self.description
+        experiment.library = self.library
+        experiment.platform_unit = self.platform_unit
+        experiment.run_time = self.run_time
+        experiment.message_create_time = protocol.datetime_to_iso8601(
+            self.creation_timestamp)
+        experiment.message_update_time = protocol.datetime_to_iso8601(
+            self.update_timestamp)
+
+
+class ReadGroup(SqlAlchemyBase):
+    __tablename__ = 'ReadGroup'
+
+    id = create_id_column()
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    creation_timestamp = create_timestamp_column()
+    update_timestamp = create_timestamp_column()
+    predicted_insert_size = sqlalchemy.Column(
+        sqlalchemy.Integer, nullable=False)
+    sample_id = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    read_group_set_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReadGroupSet.id"),
+        nullable=False)
+    read_group_set = orm.relationship(
+        "ReadGroupSet", back_populates="read_groups")
+    read_stats_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReadStats.id"),
+        nullable=False)
+    read_stats = orm.relationship(
+        "ReadStats",  cascade="all, delete, delete-orphan", single_parent=True)
+    experiment_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("Experiment.id"),
+        nullable=False)
+    experiment = orm.relationship(
+        "Experiment",  cascade="all, delete, delete-orphan", single_parent=True)
+
+    type = sqlalchemy.Column(sqlalchemy.String)
+    __mapper_args__ = {
+         'polymorphic_identity':'ReadGroup',
+         'polymorphic_on':type
+    }
+    __table_args__ = (
+        # ReadGroup names must be unique within a read group set.
+        sqlalchemy.UniqueConstraint("read_group_set_id", "name"),
+    )
+
+    def __init__(self, name=None, sample_id=None):
+        self.name = name
+        self.sample_id = sample_id
+        self.description = ""
+        self.predicted_insert_size = 0
+        self.read_stats = ReadStats()
+
+    def get_protobuf(self):
+        ret = protocol.ReadGroup()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.description = self.description
+        ret.sample_id = self.sample_id
+        ret.created = protocol.datetime_to_milliseconds(
+            self.creation_timestamp)
+        ret.updated = protocol.datetime_to_milliseconds(
+            self.update_timestamp)
+        ret.dataset_id = str(self.read_group_set.dataset_id)
+        ret.reference_set_id = str(self.read_group_set.reference_set_id)
+        ret.predicted_insert_size = self.predicted_insert_size
+        self.read_stats.update_protobuf(ret.stats)
+        ret.programs.extend(
+            p.get_protobuf() for p in self.read_group_set.programs)
+        self.experiment.update_protobuf(ret.experiment)
+        return ret
+
+
+
+class ReadGroupSet(SqlAlchemyBase):
+    __tablename__ = 'ReadGroupSet'
+
+    id = create_id_column()
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    dataset_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
+        nullable=False)
+    dataset = orm.relationship(
+        "Dataset",  cascade="all, delete, delete-orphan", single_parent=True)
+    reference_set_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
+        nullable=False)
+    reference_set = orm.relationship("ReferenceSet", single_parent=True)
+    read_stats_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReadStats.id"),
+        nullable=False)
+    read_stats = orm.relationship(
+        "ReadStats",  cascade="all, delete, delete-orphan", single_parent=True)
+    # For simplicity we associate the programs with the ReadGroupSet rather
+    # than the read group, as the protocol does.
+    programs = orm.relationship(
+        "Program",  cascade="all, delete, delete-orphan", single_parent=True)
+    read_groups = orm.relationship(
+        "ReadGroup", back_populates="read_group_set",
+        cascade="all, delete, delete-orphan")
+
+    type = sqlalchemy.Column(sqlalchemy.String)
+    __mapper_args__ = {
+         'polymorphic_identity':'ReadGroupSet',
+         'polymorphic_on':type
+    }
+    __table_args__ = (
+        # ReadGroupSet names must be unique within a dataset
+        sqlalchemy.UniqueConstraint("dataset_id", "name"),
+    )
+
+    def __init__(self, name):
+        self.name = name
+        self.read_stats = ReadStats()
+        self.experiment = Experiment()
+
+    def get_protobuf(self):
+        ret = protocol.ReadGroupSet()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.dataset_id = str(self.dataset_id)
+        ret.read_groups.extend(
+            rg.get_protobuf() for rg in self.read_groups)
+        self.read_stats.update_protobuf(ret.stats)
+        return ret
 
 
 class RegistryDb(object):
@@ -411,6 +612,16 @@ class RegistryDb(object):
         except sqlalchemy.exc.IntegrityError as ie:
             raise exceptions.DuplicateNameException(variant_set.name)
 
+    def add_read_group_set(self, read_group_set):
+        """
+        Adds the specified variant_set to this data repository.
+        """
+        try:
+            self._session.add(read_group_set)
+            self._session.commit()
+        except sqlalchemy.exc.IntegrityError as ie:
+            raise exceptions.DuplicateNameException(read_group_set.name)
+
     # Object accessors by name.
 
     def get_dataset_by_name(self, name):
@@ -436,10 +647,31 @@ class RegistryDb(object):
     # Object accessors by ID. These are run when the corresponding GET request
     # is received.
 
+    def get_read_group(self, id_):
+        """
+        Retuns the ReadGroup with the specified ID, or raises a
+        ReadGroupNotFoundException if it does not exist.
+        """
+        result = self._session.query(ReadGroup).filter(ReadGroup.id == id_).first()
+        if result is None:
+            raise exceptions.ReadGroupNotFoundException(id_)
+        return result
+
+    def get_read_group_set(self, id_):
+        """
+        Retuns the ReadGroupSet with the specified ID, or raises a
+        ReadGroupSetNotFoundException if it does not exist.
+        """
+        result = self._session.query(ReadGroupSet).filter(
+            ReadGroupSet.id == id_).first()
+        if result is None:
+            raise exceptions.ReadGroupSetNotFoundException(id_)
+        return result
+
     def get_call_set(self, id_):
         """
         Retuns the CallSet with the specified ID, or raises a
-        VariantSetNotFoundException if it does not exist.
+        CallSetNotFoundException if it does not exist.
         """
         result = self._session.query(CallSet).filter(CallSet.id == id_).first()
         if result is None:
@@ -534,6 +766,16 @@ class RegistryDb(object):
         query = query.filter(CallSet.variant_sets.any(id=request.variant_set_id))
         if request.name:
             query = query.filter(CallSet.name == request.name)
+        return query
+
+    def get_read_group_sets_search_query(self, request):
+        """
+        Returns the query object representing all the rows in the specified
+        SearchReadGroupSetsRequest.
+        """
+        query = self._session.query(ReadGroupSet)
+        if request.name:
+            query = query.filter(ReadGroupSet.name == request.name)
         return query
 
 
@@ -731,4 +973,10 @@ class VariantCompoundId(CompoundId):
     """
     fields = ['variant_set_id', 'reference_name', 'start', 'md5']
 
+
+class ReadAlignmentCompoundId(CompoundId):
+    """
+    The compound id for a variant
+    """
+    fields = ['read_group_id', 'reference_id', 'position', 'fragment_name']
 

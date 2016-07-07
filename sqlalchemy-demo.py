@@ -33,14 +33,16 @@ vcfs = glob.glob(
 indexes = [vcf + ".tbi" for vcf in vcfs]
 
 variant_set = htslib.HtslibVariantSet("vs1", vcfs, indexes)
-variant_set.dataset_id = dataset.id
-variant_set.reference_set_id = rs1.id
+variant_set.dataset = dataset
+variant_set.reference_set = rs1
 db.add_variant_set(variant_set)
 
 variant_set = simulator.SimulatedVariantSet("sim_vs", 234, num_calls=10)
-variant_set.dataset_id = dataset.id
-variant_set.reference_set_id = rs1.id
+variant_set.dataset = dataset
+variant_set.reference_set = rs1
 db.add_variant_set(variant_set)
+
+print(variant_set.get_protobuf())
 
 for metadata in variant_set.variant_set_metadata:
     print(metadata.id, metadata.key)
@@ -51,5 +53,46 @@ for call_set in variant_set.call_sets:
 
 for rs in db.get_reference_sets():
     print(rs.id, rs.name)
+
+# rgs = registry.ReadGroupSet("name")
+# rgs.dataset = dataset
+# rgs.reference_set = rs1
+# rgs.read_stats = registry.ReadStats(1, 13, 13)
+# rg = registry.ReadGroup("rg1", "sid")
+# rgs.read_groups.append(rg)
+# rg.read_stats = registry.ReadStats(1, 1, 1)
+# program = registry.Program(name="x", version="y")
+# rgs.programs.append(program)
+# rgs.experiment = registry.Experiment(description="fake")
+# rgs = simulator.SimulatedReadGroupSet(
+#     "sim_rgs", 100, num_read_groups=5)
+# rgs.dataset = dataset
+# rgs.reference_set = rs1
+
+# db.add_read_group_set(rgs)
+
+bam = "tests/data/datasets/dataset1/reads/HG00096.mapped.ILLUMINA.bwa.GBR.low_coverage.20120522.bam"
+rgs = htslib.HtslibReadGroupSet("HG0096", bam, bam + ".bai")
+rgs.dataset = dataset
+rgs.reference_set = rs1
+db.add_read_group_set(rgs)
+
+bam = "1kg-data/NA12878.mapped.ILLUMINA.bwa.CEU.low_coverage.20121211.bam"
+rgs = htslib.HtslibReadGroupSet("NA12878", bam, bam + ".bai")
+rgs.dataset = dataset
+rgs.reference_set = rs1
+db.add_read_group_set(rgs)
+
+bam = "1kg-data/NA21144.mapped.ILLUMINA.bwa.GIH.low_coverage.20130415.bam"
+rgs = htslib.HtslibReadGroupSet("NA21144", bam, bam + ".bai")
+rgs.dataset = dataset
+rgs.reference_set = rs1
+db.add_read_group_set(rgs)
+
+
+
+print(rgs)
+# print(rgs.dataset)
+print(rgs.get_protobuf())
 
 db.close()

@@ -696,34 +696,30 @@ class SearchReadsRunner(AbstractSearchRunner):
         if args.readGroupIds is not None:
             self._readGroupIds = args.readGroupIds.split(",")
 
-    def _run(self, referenceGroupId, referenceId=None):
-        """
-        automatically guess reference id if not passed
-        """
-        # check if we can get reference id from rg
-        if referenceId is None:
-            referenceId = self._referenceId
-        if referenceId is None:
-            rg = self._client.getReadGroup(readGroupId=referenceGroupId)
-            iterator = self._client.searchReferences(rg.reference_set_id)
-            for reference in iterator:
-                self._run(referenceGroupId, reference.id)
-        else:
-            iterator = self._client.searchReads(
-                readGroupIds=[referenceGroupId], referenceId=referenceId,
-                start=self._start, end=self._end)
-            self._output(iterator)
+    def _run(self, read_group_ids, reference_id):
+        iterator = self._client.searchReads(
+            readGroupIds=read_group_ids, referenceId=reference_id,
+            start=self._start, end=self._end)
+        self._output(iterator)
 
     def run(self):
         """
         Iterate passed read group ids, or go through all available read groups
         """
-        if not self._readGroupIds:
-            for referenceGroupId in self.getAllReadGroups():
-                self._run(referenceGroupId)
-        else:
-            for referenceGroupId in self._readGroupIds:
-                self._run(referenceGroupId)
+        # if self._readGroupIds is None:
+        #     for read_group_set in self.getAllReadGroupSets():
+        #         read_group_ids = [rg.id for rg in read_group_set.read_groups]
+        #         self._run(read_group_ids)
+        # else:
+        self._run(self._readGroupIds, self._referenceId)
+
+        # referenceId = self._referenceId
+        # if referenceId is None:
+        #     rg = self._client.getReadGroup(readGroupId=read_group_ids[0])
+        #     iterator = self._client.searchReferences(rg.reference_set_id)
+        #     for reference in iterator:
+                # self._run(referenceGroupId, reference.id)
+        # else:
 
     def _textOutput(self, gaObjects):
         """
@@ -731,7 +727,11 @@ class SearchReadsRunner(AbstractSearchRunner):
         """
         for read in gaObjects:
             # TODO add in some more useful output here.
-            print(read.id)
+            print(
+                read.id, read.read_group_id,
+                read.alignment.position.reference_name,
+                read.alignment.position.position,
+                read.fragment_length, sep="\t")
 
 
 # ListReferenceBases is an oddball, and doesn't fit either get or

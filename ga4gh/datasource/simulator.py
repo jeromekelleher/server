@@ -169,8 +169,10 @@ class SimulatedVariantSet(registry.VariantSet):
     def run_search(self, request, call_sets, response_builder):
         start = request.start
         if request.page_token:
-            # TODO this should raise the correct error.
-            start = int(request.page_token)
+            try:
+                start = int(request.page_token)
+            except ValueError:
+                raise exceptions.BadPageTokenException(request.page_token)
         i = start
         while i < request.end and not response_builder.isFull():
             response_builder.addValue(
@@ -180,26 +182,101 @@ class SimulatedVariantSet(registry.VariantSet):
             response_builder.setNextPageToken(str(i))
 
 
-#     def getVariant(self, compoundId):
-#         randomNumberGenerator = random.Random()
-#         start = int(compoundId.start)
-#         randomNumberGenerator.seed(self._randomSeed + start)
-#         variant = self.generateVariant(
-#             compoundId.reference_name, start, randomNumberGenerator)
-#         return variant
+class SimulatedReadGroupSet(registry.ReadGroupSet):
 
-#     def getVariants(self, referenceName, startPosition, endPosition,
-#                     callSetIds=None):
-#         randomNumberGenerator = random.Random()
-#         randomNumberGenerator.seed(self._randomSeed)
-#         i = startPosition
-#         while i < endPosition:
-#             if randomNumberGenerator.random() < self._variantDensity:
-#                 randomNumberGenerator.seed(self._randomSeed + i)
-#                 yield self.generateVariant(
-#                     referenceName, i, randomNumberGenerator)
-#             i += 1
+    __tablename__ = 'SimulatedReadGroupSet'
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroupSet.id'),
+        primary_key=True)
+    random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+
+    __mapper_args__ = {
+        'polymorphic_identity':'SimulatedReadGroupSet',
+    }
+
+    def __init__(self, name, random_seed=1, num_read_groups=2):
+        super(SimulatedReadGroupSet, self).__init__(name)
+        self.random_seed = random_seed
+        rng = random.Random()
+        rng.seed(random_seed)
+        for j in range(num_read_groups):
+            read_group = SimulatedReadGroup(
+                name="sim_rgs{}".format(j),
+                sample_id="sim_sample_id{}".format(j),
+                random_seed=random.randint(0, 2**31))
+            self.read_groups.append(read_group)
+
+    def run_search(self, request, reference, response_builder):
+        print("Running search on ", request)
 
 
+class SimulatedReadGroup(registry.ReadGroup):
+
+    __tablename__ = 'SimulatedReadGroup'
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroup.id'),
+        primary_key=True)
+    random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+
+    __mapper_args__ = {
+        'polymorphic_identity':'SimulatedReadGroup',
+    }
+
+    def __init__(self, name, sample_id, random_seed=1):
+        super(SimulatedReadGroup, self).__init__(
+                name=name, sample_id=sample_id)
+        self.random_seed = random_seed
+        rng = random.Random()
+        rng.seed(random_seed)
+        self.predicted_insert_size = random.randint(10, 100)
+        self.read_stats = registry.ReadStats(
+            aligned_read_count=random.randint(0, 100),
+            unaligned_read_count=random.randint(0, 100),
+            base_count=random.randint(0, 100))
+
+    def generate_alignment(self, reference, start):
+        # TODO fill out a bit more
+        rng = random.Random(self.random_seed + start)
+        alignment = protocol.ReadAlignment()
+        alignment.fragment_length = rng.randint(10, 100)
+        alignment.aligned_sequence = ""
+        for i in range(alignment.fragment_length):
+            # TODO: are these reasonable quality values?
+            alignment.aligned_quality.append(rng.randint(1, 20))
+            alignment.aligned_sequence += rng.choice("ACGT")
+
+        alignment.alignment.position.position = 0
+        alignment.alignment.position.reference_name = "NotImplemented"
+        alignment.alignment.position.strand = protocol.POS_STRAND
+        alignment.duplicate_fragment = False
+        alignment.failed_vendor_quality_checks = False
+
+        alignment.fragment_name = "{}$simulated{}".format(self.name, i)
+        alignment.number_reads = 0
+        alignment.improper_placement = False
+        alignment.read_group_id = str(self.id)
+        alignment.read_number = -1
+        alignment.secondary_alignment = False
+        alignment.supplementary_alignment = False
+        # alignment.id = self._parentContainer.getReadAlignmentId(alignment)
+        return alignment
+
+
+    def run_search(self, request, reference, response_builder):
+        # TODO abstract this so that we can share this paging code with
+        # the variant set.
+        start = request.start
+        if request.page_token:
+            try:
+                start = int(request.page_token)
+            except ValueError:
+                raise exceptions.BadPageTokenException(request.page_token)
+        i = start
+        while i < request.end and not response_builder.isFull():
+            response_builder.addValue(
+                self.generate_alignment(reference, i))
+            i += 1
+        if i != request.end:
+            response_builder.setNextPageToken(str(i))
 
 

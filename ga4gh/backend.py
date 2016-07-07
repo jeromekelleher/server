@@ -456,7 +456,10 @@ class Backend(object):
     def _run_sql_query(self, request, query, responseBuilder):
         start = 0
         if request.page_token:
-            start = int(request.page_token)
+            try:
+                start = int(request.page_token)
+            except ValueError:
+                raise exceptions.BadPageTokenException(request.page_token)
         end = start + request.page_size
         offset = start
         for result in query[start:end]:
@@ -475,10 +478,8 @@ class Backend(object):
         """
         query = self._dataRepository.get_datasets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
-        # return self._topLevelObjectGenerator(
-        #     request, self.getDataRepository().getNumDatasets(),
-        #     self.getDataRepository().getDatasetByIndex)
 
+<<<<<<< HEAD
     def bioSamplesGenerator(self, request):
         dataset = self.getDataRepository().getDataset(request.dataset_id)
         results = []
@@ -506,36 +507,37 @@ class Backend(object):
                 results.append(obj)
         return self._objectListGenerator(request, results)
 
-    def readGroupSetsGenerator(self, request):
-        """
-        Returns a generator over the (readGroupSet, nextPageToken) pairs
-        defined by the specified request.
-        """
-        dataset = self.getDataRepository().getDataset(request.dataset_id)
-        results = []
-        for obj in dataset.getReadGroupSets():
-            include = True
-            rgsp = obj.toProtocolElement()
-            if request.name:
-                if request.name != obj.getLocalId():
-                    include = False
-            if request.bio_sample_id:
-                rgsp.ClearField("read_groups")
-                for readGroup in obj.getReadGroups():
-                    if request.bio_sample_id == readGroup.getBioSampleId():
-                        rgsp.read_groups.extend(
-                            [readGroup.toProtocolElement()])
-                # If none of the biosamples match and the readgroupset
-                # contains reagroups, don't include in the response
-                if len(rgsp.read_groups) == 0 and \
-                        len(obj.getReadGroups()) != 0:
-                    include = False
-                else:
-                    include = True and include
-            if include:
-                results.append(rgsp)
-        return self._protocolListGenerator(request, results)
-
+    def readGroupSetsGenerator(self, request, responseBuilder):
+        # """
+        # Returns a generator over the (readGroupSet, nextPageToken) pairs
+        # defined by the specified request.
+        # """
+        # dataset = self.getDataRepository().getDataset(request.dataset_id)
+        # results = []
+        # for obj in dataset.getReadGroupSets():
+        #     include = True
+        #     rgsp = obj.toProtocolElement()
+        #     if request.name:
+        #         if request.name != obj.getLocalId():
+        #             include = False
+        #     if request.bio_sample_id:
+        #         rgsp.ClearField("read_groups")
+        #         for readGroup in obj.getReadGroups():
+        #             if request.bio_sample_id == readGroup.getBioSampleId():
+        #                 rgsp.read_groups.extend(
+        #                     [readGroup.toProtocolElement()])
+        #         # If none of the biosamples match and the readgroupset
+        #         # contains reagroups, don't include in the response
+        #         if len(rgsp.read_groups) == 0 and \
+        #                 len(obj.getReadGroups()) != 0:
+        #             include = False
+        #         else:
+        #             include = True and include
+        #     if include:
+        #         results.append(rgsp)
+        # return self._protocolListGenerator(request, results)
+        query = self._dataRepository.get_read_group_sets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
     def referenceSetsGenerator(self, request, responseBuilder):
         """
@@ -545,22 +547,6 @@ class Backend(object):
         query = self._dataRepository.get_reference_sets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
-        # results = []
-        # for obj in self.getDataRepository().get_reference_sets():
-        #     include = True
-        #     if request.md5checksum:
-        #         if request.md5checksum != obj.getMd5Checksum():
-        #             include = False
-        #     if request.accession:
-        #         if request.accession not in obj.getSourceAccessions():
-        #             include = False
-        #     if request.assembly_id:
-        #         if request.assembly_id != obj.getAssemblyId():
-        #             include = False
-        #     if include:
-        #         results.append(obj)
-        # return self._objectListGenerator(request, results)
-
     def referencesGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (reference, nextPageToken) pairs
@@ -568,21 +554,6 @@ class Backend(object):
         """
         query = self._dataRepository.get_references_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
-
-        # referenceSet = self.getDataRepository().getReferenceSet(
-        #     request.reference_set_id)
-        # results = []
-        # for obj in referenceSet.getReferences():
-        #     include = True
-        #     if request.md5checksum:
-        #         if request.md5checksum != obj.getMd5Checksum():
-        #             include = False
-        #     if request.accession:
-        #         if request.accession not in obj.getSourceAccessions():
-        #             include = False
-        #     if include:
-        #         results.append(obj)
-        # return self._objectListGenerator(request, results)
 
     def variantSetsGenerator(self, request, responseBuilder):
         """
@@ -605,7 +576,7 @@ class Backend(object):
             request, variantSet.getNumVariantAnnotationSets(),
             variantSet.getVariantAnnotationSetByIndex)
 
-    def readsGenerator(self, request):
+    def readsGenerator(self, request, response_builder):
         """
         Returns a generator over the (read, nextPageToken) pairs defined
         by the specified request
@@ -615,44 +586,20 @@ class Backend(object):
         if len(request.read_group_ids) < 1:
             raise exceptions.BadRequestException(
                 "At least one readGroupId must be specified")
-        elif len(request.read_group_ids) == 1:
-            return self._readsGeneratorSingle(request)
-        else:
-            return self._readsGeneratorMultiple(request)
-
-    def _readsGeneratorSingle(self, request):
-        compoundId = datamodel.ReadGroupCompoundId.parse(
-            request.read_group_ids[0])
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        readGroupSet = dataset.getReadGroupSet(compoundId.read_group_set_id)
-        referenceSet = readGroupSet.getReferenceSet()
-        if referenceSet is None:
-            raise exceptions.ReadGroupSetNotMappedToReferenceSetException(
-                    readGroupSet.getId())
-        reference = referenceSet.getReference(request.reference_id)
-        readGroup = readGroupSet.getReadGroup(compoundId.read_group_id)
-        intervalIterator = ReadsIntervalIterator(
-            request, readGroup, reference)
-        return intervalIterator
-
-    def _readsGeneratorMultiple(self, request):
-        compoundId = datamodel.ReadGroupCompoundId.parse(
-            request.read_group_ids[0])
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        readGroupSet = dataset.getReadGroupSet(compoundId.read_group_set_id)
-        referenceSet = readGroupSet.getReferenceSet()
-        if referenceSet is None:
-            raise exceptions.ReadGroupSetNotMappedToReferenceSetException(
-                    readGroupSet.getId())
-        reference = referenceSet.getReference(request.reference_id)
-        readGroupIds = readGroupSet.getReadGroupIds()
-        if set(readGroupIds) != set(request.read_group_ids):
-            raise exceptions.BadRequestException(
-                "If multiple readGroupIds are specified, "
-                "they must be all of the readGroupIds in a ReadGroup")
-        intervalIterator = ReadsIntervalIterator(
-            request, readGroupSet, reference)
-        return intervalIterator
+        db = self.getDataRepository()
+        read_group_set = None
+        read_groups = []
+        for read_group_id in request.read_group_ids:
+            read_group = db.get_read_group(read_group_id)
+            if read_group_set is None:
+                read_group_set = read_group.read_group_set
+            elif read_group_set != read_group.read_group_set:
+                raise exceptions.BadRequestException(
+                    "All ReadGroups must come from the same ReadGroupSet")
+            read_groups.append(read_group)
+        reference = db.get_reference(request.reference_id)
+        read_group_set.run_search(
+            request, reference, read_groups, response_builder)
 
     def variantsGenerator(self, request, response_builder):
         """
@@ -913,20 +860,15 @@ class Backend(object):
         """
         Returns a readGroupSet with the given id_
         """
-        compoundId = datamodel.ReadGroupSetCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        readGroupSet = dataset.getReadGroupSet(id_)
-        return self.runGetRequest(readGroupSet)
+        read_group_set = self.getDataRepository().get_read_group_set(id_)
+        return self.runGetRequest(read_group_set)
 
     def runGetReadGroup(self, id_):
         """
         Returns a read group with the given id_
         """
-        compoundId = datamodel.ReadGroupCompoundId.parse(id_)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        readGroupSet = dataset.getReadGroupSet(compoundId.read_group_set_id)
-        readGroup = readGroupSet.getReadGroup(id_)
-        return self.runGetRequest(readGroup)
+        read_group = self.getDataRepository().get_read_group(id_)
+        return self.runGetRequest(read_group)
 
     def runGetReference(self, id_):
         """
