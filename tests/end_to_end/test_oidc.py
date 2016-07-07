@@ -16,8 +16,6 @@ import client
 import server
 import server_test
 
-import ga4gh.datarepo as datarepo
-
 
 def getClientKey(server_url, username, password):
     """

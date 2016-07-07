@@ -25,7 +25,7 @@ import requests
 import ga4gh
 import ga4gh.backend as backend
 import ga4gh.client as client
-# import ga4gh.converters as converters
+import ga4gh.converters as converters
 import ga4gh.frontend as frontend
 import ga4gh.configtest as configtest
 import ga4gh.exceptions as exceptions
@@ -723,7 +723,7 @@ class SearchReadsRunner(AbstractSearchRunner):
         #     rg = self._client.getReadGroup(readGroupId=read_group_ids[0])
         #     iterator = self._client.searchReferences(rg.reference_set_id)
         #     for reference in iterator:
-                # self._run(referenceGroupId, reference.id)
+        # self._run(referenceGroupId, reference.id)
         # else:
 
     def _textOutput(self, gaObjects):
@@ -1713,7 +1713,7 @@ class RepoManager(object):
         self._registry.open()
 
     def _checkSequenceOntology(self, ontology):
-        so = ontologies.SEQUENCE_ONTOLOGY_PREFIX
+        so = ontologies.SEQUENCE_ONTOLOGY_PREFIX  # noqa
         if ontology.getOntologyPrefix() != so:
             raise exceptions.RepoManagerException(
                 "Ontology '{}' does not have ontology prefix '{}'".format(
@@ -1761,7 +1761,7 @@ class RepoManager(object):
                                      self._args.relativePath)
         if name is None:
             name = getNameFromPath(filePath)
-        ontology = ontologies.Ontology(name)
+        ontology = ontologies.Ontology(name)  # noqa
         ontology.populateFromFile(filePath)
         self._updateRepo(self._registry.insertOntology, ontology)
 
@@ -1825,7 +1825,8 @@ class RepoManager(object):
         if referenceSetName is None:
             # Try to find a reference set name from the BAM header.
             referenceSetName = readGroupSet.assembly_identifier
-        referenceSet = self._registry.get_reference_set_by_name(referenceSetName)
+        referenceSet = self._registry.get_reference_set_by_name(
+            referenceSetName)
         readGroupSet.check_references(referenceSet)
         readGroupSet.reference_set = referenceSet
         readGroupSet.dataset = dataset
@@ -1892,7 +1893,8 @@ class RepoManager(object):
                 "Cannot infer the ReferenceSet from the VCF header. Please "
                 "specify the ReferenceSet to associate with this "
                 "VariantSet using the --referenceSetName option")
-        reference_set = self._registry.get_reference_set_by_name(referenceSetName)
+        reference_set = self._registry.get_reference_set_by_name(
+            referenceSetName)
         variant_set.reference_set = reference_set
         variant_set.dataset = dataset
         self._registry.add_variant_set(variant_set)
@@ -1973,7 +1975,7 @@ class RepoManager(object):
         filePath = self._getFilePath(
             self._args.filePath, self._args.relativePath)
         name = getNameFromPath(self._args.filePath)
-        featureSet = sequenceAnnotations.Gff3DbFeatureSet(
+        featureSet = sequenceAnnotations.Gff3DbFeatureSet(  # noqa
             dataset, name)
         referenceSetName = self._args.referenceSetName
         if referenceSetName is None:

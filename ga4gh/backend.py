@@ -6,17 +6,17 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-# import ga4gh.datamodel as datamodel
 import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
 import ga4gh.registry as registry
 
 # We must import these modules before queries are run, or we won't be
-# able to load the polymorphic types at run time.
-import ga4gh.datasource.simulator as simulator
-import ga4gh.datasource.htslib as htslib
+# able to load the polymorphic types at run time. These should
+# probably be imported in the frontend so that we are more
+# configurable and open the possibility of a plugin architecture.
+import ga4gh.datasource.simulator as simulator  # noqa
+import ga4gh.datasource.htslib as htslib  # noqa
 
-# import ga4gh.datamodel.references as references
 
 def _parseIntegerArgument(args, key, defaultValue):
     """
@@ -579,7 +579,7 @@ class Backend(object):
         Returns a generator over the (variantAnnotationSet, nextPageToken)
         pairs defined by the specified request.
         """
-        compoundId = datamodel.VariantSetCompoundId.parse(
+        compoundId = datamodel.VariantSetCompoundId.parse(  # noqa
             request.variant_set_id)
         dataset = self._registry_db.getDataset(compoundId.dataset_id)
         variantSet = dataset.getVariantSet(request.variant_set_id)
@@ -627,22 +627,15 @@ class Backend(object):
         if len(call_sets) != len(request.call_set_ids):
             # TODO get the offending call set ID.
             raise exceptions.CallSetNotInVariantSetException(
-                    "TODO" , variant_set.id)
+                    "TODO", variant_set.id)
         variant_set.run_search(request, call_sets, response_builder)
-
-        # compoundId = datamodel.VariantSetCompoundId \
-        #     .parse(request.variant_set_id)
-        # dataset = self._registry_db.getDataset(compoundId.dataset_id)
-        # variantSet = dataset.getVariantSet(compoundId.variant_set_id)
-        # intervalIterator = VariantsIntervalIterator(request, variantSet)
-        # return intervalIterator
 
     def variantAnnotationsGenerator(self, request):
         """
         Returns a generator over the (variantAnnotaitons, nextPageToken) pairs
         defined by the specified request.
         """
-        compoundId = datamodel.VariantAnnotationSetCompoundId.parse(
+        compoundId = datamodel.VariantAnnotationSetCompoundId.parse(  # noqa
             request.variant_annotation_set_id)
         dataset = self._registry_db.getDataset(compoundId.dataset_id)
         variantSet = dataset.getVariantSet(compoundId.variant_set_id)
@@ -660,10 +653,10 @@ class Backend(object):
         compoundId = None
         parentId = None
         if request.feature_set_id is not None:
-            compoundId = datamodel.FeatureSetCompoundId.parse(
+            compoundId = datamodel.FeatureSetCompoundId.parse(  # noqa
                 request.feature_set_id)
         if request.parent_id and request.parent_id != "":
-            compoundParentId = datamodel.FeatureCompoundId.parse(
+            compoundParentId = datamodel.FeatureCompoundId.parse(  # noqa
                 request.parent_id)
             parentId = compoundParentId.featureId
             # A client can optionally specify JUST the (compound) parentID,
@@ -862,7 +855,7 @@ class Backend(object):
         Returns JSON string of the feature object corresponding to
         the feature compoundID passed in.
         """
-        compoundId = datamodel.FeatureCompoundId.parse(id_)
+        compoundId = datamodel.FeatureCompoundId.parse(id_)  # noqa
         dataset = self._registry_db.getDataset(compoundId.dataset_id)
         featureSet = dataset.getFeatureSet(compoundId.feature_set_id)
         gaFeature = featureSet.getFeature(compoundId)
@@ -908,7 +901,7 @@ class Backend(object):
         """
         Runs a getFeatureSet request for the specified ID.
         """
-        compoundId = datamodel.FeatureSetCompoundId.parse(id_)
+        compoundId = datamodel.FeatureSetCompoundId.parse(id_)  # noqa
         dataset = self._registry_db.getDataset(compoundId.dataset_id)
         featureSet = dataset.getFeatureSet(id_)
         return self.runGetRequest(featureSet)
@@ -924,7 +917,7 @@ class Backend(object):
         """
         Runs a getVariantSet request for the specified ID.
         """
-        compoundId = datamodel.VariantAnnotationSetCompoundId.parse(id_)
+        compoundId = datamodel.VariantAnnotationSetCompoundId.parse(id_)  # noqa
         dataset = self._registry_db.getDataset(compoundId.dataset_id)
         variantSet = dataset.getVariantSet(compoundId.variant_set_id)
         variantAnnotationSet = variantSet.getVariantAnnotationSet(id_)

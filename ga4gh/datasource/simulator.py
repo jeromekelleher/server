@@ -213,7 +213,7 @@ class SimulatedVariantSet(registry.VariantSet):
         the_end = end
         if end is None:
             the_end = 2**32
-        for i in range(start, end):
+        for i in range(start, the_end):
             yield self.generate_variant(reference_name, call_sets, i)
 
 
@@ -291,6 +291,7 @@ class SimulatedReadGroupSet(registry.ReadGroupSet):
             i += 1
         if i != request.end:
             response_builder.setNextPageToken(str(i))
+
 
 class SimulatedReadGroup(registry.ReadGroup):
 

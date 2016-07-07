@@ -1,3 +1,5 @@
+# flake8: noqa
+# Disabling flake8 tests until this code is ported to sqlalchemy.
 """
 Data-driven tests for sequence annotation Features.
 """
@@ -5,10 +7,9 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import ga4gh.datamodel as datamodel
 import ga4gh.protocol as protocol
 import tests.datadriven as datadriven
-# import tests.paths as paths
+import tests.paths as paths
 
 _datasetName = "ds"
 

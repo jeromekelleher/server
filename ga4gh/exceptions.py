@@ -252,6 +252,11 @@ class DatasetNotFoundException(NotFoundException):
             datasetId)
 
 
+class ReadGroupSetNotFoundException(ObjectNotFoundException):
+    def __init__(self, readGroupId):
+        self.message = "readGroupSetId '{}' not found".format(readGroupId)
+
+
 class ReadGroupNotFoundException(ObjectNotFoundException):
     def __init__(self, readGroupId):
         self.message = "readGroupId '{}' not found".format(readGroupId)

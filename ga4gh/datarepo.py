@@ -1,3 +1,6 @@
+# flake8: noqa
+# Skip this whole file for flake8 checks as it will be removed as soon
+# as all the code has been ported.
 """
 The backing data store for the GA4GH server
 """
@@ -9,14 +12,15 @@ import json
 import os
 import sqlite3
 
-import ga4gh.datamodel as datamodel
-import ga4gh.datamodel.datasets as datasets
-import ga4gh.datamodel.ontologies as ontologies
-import ga4gh.datamodel.reads as reads
-import ga4gh.datamodel.references as references
-import ga4gh.datamodel.variants as variants
-import ga4gh.datamodel.sequenceAnnotations as sequenceAnnotations
-import ga4gh.datamodel.bio_metadata as biodata
+# import ga4gh.datamodel as datamodel
+# import ga4gh.datamodel.datasets as datasets
+# import ga4gh.datamodel.ontologies as ontologies
+# import ga4gh.datamodel.reads as reads
+# import ga4gh.datamodel.references as references
+# import ga4gh.datamodel.variants as variants
+# import ga4gh.datamodel.sequenceAnnotations as sequenceAnnotations
+# import ga4gh.datamodel.bio_metadata as biodata
+
 import ga4gh.exceptions as exceptions
 from ga4gh import protocol
 

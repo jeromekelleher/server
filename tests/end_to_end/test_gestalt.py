@@ -49,7 +49,7 @@ class TestGestalt(server_test.ServerTest):
         self.simulatedReadGroupId = readGroupId
         self.simulatedReferenceSetId = referenceSetId
         self.simulatedReferenceId = referenceId
-        self.simulatedVariantAnnotationSetId = variantAnnotationSetId
+        self.simulatedVariantAnnotationSetId = variantAnnotationSetId  # noqa
         self.client = client.ClientForTesting(self.server.getUrl())
         self.runVariantsRequest()
         self.assertLogsWritten()

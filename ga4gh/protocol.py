@@ -65,6 +65,7 @@ def datetime_to_milliseconds(t):
     millis = delta.total_seconds() * 1000
     return int(millis)
 
+
 def datetime_to_iso8601(t):
     """
     Converts the specified datetime object into ISO8601 format.

@@ -41,7 +41,6 @@ def create_timestamp_column():
 SqlAlchemyBase = sqlalchemy.ext.declarative.declarative_base()
 
 
-
 #####################################################################
 #
 # Datasets and tables to represent schema wide objects.
@@ -64,7 +63,6 @@ class Dataset(SqlAlchemyBase):
     read_group_sets = orm.relationship(
         "ReadGroupSet", back_populates="dataset", lazy="dynamic",
         cascade="all, delete, delete-orphan")
-
 
     def __init__(self, name):
         self.name = name
@@ -998,7 +996,6 @@ class RegistryDb(object):
 
     def get_variant_sets(self):
         return self._session.query(VariantSet).all()
-
 
     # Getters to provide queries corresponding to the external search requests.
 

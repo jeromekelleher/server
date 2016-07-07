@@ -44,7 +44,7 @@ def main(args):
         if name.startswith("HG"):
             referenceSetName = "NCBI37"
         run("add-readgroupset", repoFile, datasetName, useRelativePath,
-            dataFile, "-R", referenceSetName )
+            dataFile, "-R", referenceSetName)
 
     pattern = os.path.join(prefix, "datasets/dataset1/variants", "*")
     for j, dataFile in enumerate(glob.glob(pattern)):

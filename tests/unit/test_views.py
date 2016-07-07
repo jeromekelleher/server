@@ -13,7 +13,6 @@ import logging
 import tests.paths as paths
 import tests.utils as utils
 
-import ga4gh.datamodel as datamodel
 import ga4gh.frontend as frontend
 import ga4gh.protocol as protocol
 
@@ -62,6 +61,7 @@ class TestFrontend(unittest.TestCase):
         cls.readGroupSetId = str(readGroupSet.id)
         cls.readGroupId = str(readGroupSet.read_groups[0].id)
         cls.variantId = variant.id
+        cls.invalidId = "can't possibly be an id"
 
     @classmethod
     def tearDownClass(cls):
@@ -318,12 +318,8 @@ class TestFrontend(unittest.TestCase):
         datasetId = responseData.datasets[0].id
         response = self.sendGetDataset(datasetId)
         self.assertEqual(200, response.status_code)
-
         # Test Error: 404, ID not found
-        invalidId = datamodel.DatasetCompoundId.getInvalidIdString()
-        obfuscated = datamodel.CompoundId.obfuscate(invalidId)
-        compoundId = datamodel.DatasetCompoundId.parse(obfuscated)
-        response = self.sendGetDataset(str(compoundId))
+        response = self.sendGetDataset(self.invalidId)
         self.assertEqual(404, response.status_code)
 
     def testGetVariantSet(self):
@@ -333,10 +329,7 @@ class TestFrontend(unittest.TestCase):
         variantSetId = responseData.variant_sets[0].id
         response = self.sendGetVariantSet(variantSetId)
         self.assertEqual(200, response.status_code)
-        invalidId = datamodel.VariantSetCompoundId.getInvalidIdString()
-        obfuscated = datamodel.CompoundId.obfuscate(invalidId)
-        compoundId = datamodel.VariantSetCompoundId.parse(obfuscated)
-        response = self.sendGetVariantSet(str(compoundId))
+        response = self.sendGetVariantSet(self.invalidId)
         self.assertEqual(404, response.status_code)
 
     def testGetReadGroupSet(self):
@@ -344,18 +337,24 @@ class TestFrontend(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(response.data, protocol.ReadGroupSet)
         self.assertEqual(responseData.id, self.readGroupSetId)
+        response = self.sendGetReadGroupSet(self.invalidId)
+        self.assertEqual(404, response.status_code)
 
     def testGetReadGroup(self):
         response = self.sendGetReadGroup()
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(response.data, protocol.ReadGroup)
         self.assertEqual(responseData.id, self.readGroupId)
+        response = self.sendGetReadGroup(self.invalidId)
+        self.assertEqual(404, response.status_code)
 
     def testGetCallSet(self):
         response = self.sendGetCallSet()
         self.assertEqual(200, response.status_code)
         responseData = protocol.fromJson(response.data, protocol.CallSet)
         self.assertEqual(responseData.id, self.callSetId)
+        response = self.sendGetCallSet(self.invalidId)
+        self.assertEqual(404, response.status_code)
 
     @unittest.skip("FIXME compound ids for simulated variant set.")
     def testGetVariant(self):

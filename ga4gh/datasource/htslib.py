@@ -789,6 +789,9 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
     def run_search(self, request, reference, read_groups, response_builder):
         start = request.start
         end = request.end
+        if end == 0:
+            # Assume end = 0 means infinite
+            end = PysamMixin.samMaxEnd
         reference_name = reference.name.encode()
         if request.page_token:
             compound_id = registry.ReadAlignmentCompoundId.parse(
@@ -815,6 +818,8 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             response_builder.setNextPageToken(ga_alignment.id)
 
     def get_read_alignments(self, reference, read_groups, start=0, end=None):
+        # Convenience method for testing. Should be removed when the datadriven
+        # tests are refactored to use the external API.
         if end is None:
             end = PysamMixin.samMaxEnd
         read_group_ids = [str(read_group.id) for read_group in read_groups]
@@ -826,6 +831,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
                 alignment_file, alignment, reference)
             if ga_alignment.read_group_id in read_group_ids:
                 yield ga_alignment
+
 
 class PysamFileHandleCache(object):
     """

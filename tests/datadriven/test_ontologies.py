@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 Data-driven tests for ontologies.
 """
@@ -10,10 +11,10 @@ import os.path
 # TODO it may be a bit circular to use obo_parser as our method of
 # accessing ontology information, since this is the method we use
 # in the main code. However, other libraries have very heavy dependencies.
-import ga4gh.datamodel.obo_parser as obo_parser
+# import ga4gh.datamodel.obo_parser as obo_parser
 
 import ga4gh.protocol as protocol
-import ga4gh.datamodel.ontologies as ontologies
+# import ga4gh.datamodel.ontologies as ontologies
 
 import tests.datadriven as datadriven
 import tests.paths as paths
@@ -35,7 +36,7 @@ class OntologyTest(datadriven.DataDrivenTest):
     """
     def __init__(self, localId, oboFile):
         super(OntologyTest, self).__init__(localId, oboFile)
-        self._oboReader = obo_parser.OBOReader(obo_file=oboFile)
+        # self._oboReader = obo_parser.OBOReader(obo_file=oboFile)
 
     def getDataModelInstance(self, localId, dataPath):
         ontology = ontologies.Ontology(localId)

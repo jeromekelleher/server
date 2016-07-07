@@ -8,11 +8,9 @@ from __future__ import unicode_literals
 import os
 import unittest
 
-import ga4gh.datamodel.datasets as datasets
-import ga4gh.datamodel.references as references
-import ga4gh.datamodel.variants as variants
 import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
+import ga4gh.datasource.htslib as htslib
 
 
 class FaultyVariantDataTest(unittest.TestCase):
@@ -21,7 +19,7 @@ class FaultyVariantDataTest(unittest.TestCase):
     """
     def setUp(self):
         self.testDataDir = "tests/faultydata/variants"
-        self.dataset = datasets.Dataset('dataset1')
+        # self.dataset = datasets.Dataset('dataset1')
 
     def getFullPath(self, localId):
         return os.path.join(self.testDataDir, localId)
@@ -36,7 +34,7 @@ class TestVariantSetNoIndexedVcf(FaultyVariantDataTest):
             path = self.getFullPath(localId)
             self.assertRaises(
                 exceptions.NotIndexedException,
-                variants.HtslibVariantSet, self.dataset, localId, path,
+                htslib.HtslibVariantSet, self.dataset, localId, path,
                 None)
 
 
@@ -47,7 +45,7 @@ class TestInconsistentMetaData(FaultyVariantDataTest):
     def testInstantiation(self):
         for localId in self.localIds:
             path = self.getFullPath(localId)
-            variantSet = variants.HtslibVariantSet(
+            variantSet = htslib.HtslibVariantSet(
                 self.dataset, localId, path, None)
             with self.assertRaises(exceptions.InconsistentMetaDataException):
                 variantSet.checkConsistency()
@@ -60,7 +58,7 @@ class TestInconsistentCallSetId(FaultyVariantDataTest):
     def testInstantiation(self):
         for localId in self.localIds:
             path = self.getFullPath(localId)
-            variantSet = variants.HtslibVariantSet(
+            variantSet = htslib.HtslibVariantSet(
                 self.dataset, localId, path, None)
             with self.assertRaises(exceptions.InconsistentCallSetIdException):
                 variantSet.checkConsistency()
@@ -74,7 +72,7 @@ class TestOverlappingVcfVariants(FaultyVariantDataTest):
         for localId in self.localIds:
             path = self.getFullPath(localId)
             with self.assertRaises(exceptions.OverlappingVcfException):
-                variants.HtslibVariantSet(self.dataset, localId, path, None)
+                htslib.HtslibVariantSet(self.dataset, localId, path, None)
 
 
 class TestEmptyDirException(FaultyVariantDataTest):
@@ -86,7 +84,7 @@ class TestEmptyDirException(FaultyVariantDataTest):
             path = self.getFullPath(localId)
             self.assertRaises(
                 exceptions.EmptyDirException,
-                variants.HtslibVariantSet, self.dataset, localId, path, None)
+                htslib.HtslibVariantSet, self.dataset, localId, path, None)
 
 
 class TestDuplicateCallSetId(FaultyVariantDataTest):
@@ -110,7 +108,7 @@ class TestDuplicateCallSetId(FaultyVariantDataTest):
             path = self.getFullPath(localId)
             self.assertRaises(
                 exceptions.DuplicateCallSetIdException,
-                variants.HtslibVariantSet, self.dataset, localId, path,
+                htslib.HtslibVariantSet, self.dataset, localId, path,
                 None)
 
 
@@ -136,7 +134,7 @@ class TestTwoReferences(FaultyReferenceDataTest):
         path = self.getFullPath(localId)
         self.assertRaises(
             exceptions.NotExactlyOneReferenceException,
-            references.HtslibReferenceSet, localId, path, None)
+            htslib.HtslibReferenceSet, localId, path, None)
 
 
 class TestInconsistentReferenceName(FaultyReferenceDataTest):
@@ -151,4 +149,4 @@ class TestInconsistentReferenceName(FaultyReferenceDataTest):
         path = self.getFullPath(localId)
         self.assertRaises(
             exceptions.InconsistentReferenceNameException,
-            references.HtslibReferenceSet, localId, path, None)
+            htslib.HtslibReferenceSet, localId, path, None)
