@@ -33,6 +33,7 @@ import ga4gh.protocol as protocol
 
 import ga4gh.registry as registry
 import ga4gh.datasource.htslib as htslib
+import ga4gh.datasource.sql as sql
 import ga4gh.datasource.obo as obo
 
 # import ga4gh.datamodel.reads as reads
@@ -1713,11 +1714,11 @@ class RepoManager(object):
         self._registry.open()
 
     def _checkSequenceOntology(self, ontology):
-        so = ontologies.SEQUENCE_ONTOLOGY_PREFIX  # noqa
-        if ontology.getOntologyPrefix() != so:
+        so = obo.SEQUENCE_ONTOLOGY_PREFIX
+        if ontology.ontology_prefix != so:
             raise exceptions.RepoManagerException(
                 "Ontology '{}' does not have ontology prefix '{}'".format(
-                    ontology.getName(), so))
+                    ontology.name, so))
 
     def _getFilePath(self, filePath, useRelativePath):
         return filePath if useRelativePath else os.path.abspath(filePath)
@@ -1970,39 +1971,39 @@ class RepoManager(object):
         Adds a new feature set into this repo
         """
         self._openRepo()
-        dataset = self._registry.getDatasetByName(self._args.datasetName)
+        dataset = self._registry.get_dataset_by_name(self._args.datasetName)
         filePath = self._getFilePath(
             self._args.filePath, self._args.relativePath)
         name = getNameFromPath(self._args.filePath)
-        featureSet = sequenceAnnotations.Gff3DbFeatureSet(  # noqa
-            dataset, name)
-        referenceSetName = self._args.referenceSetName
-        if referenceSetName is None:
+        reference_set_name = self._args.referenceSetName
+        if reference_set_name is None:
             raise exceptions.RepoManagerException(
                 "A reference set name must be provided")
-        referenceSet = self._registry.getReferenceSetByName(referenceSetName)
-        featureSet.setReferenceSet(referenceSet)
-        ontologyName = self._args.ontologyName
-        if ontologyName is None:
+        reference_set = self._registry.get_reference_set_by_name(
+            reference_set_name)
+        ontology_name = self._args.ontologyName
+        if ontology_name is None:
             raise exceptions.RepoManagerException(
                 "A sequence ontology name must be provided")
-        ontology = self._registry.getOntologyByName(ontologyName)
+        ontology = self._registry.get_ontology_by_name(ontology_name)
         self._checkSequenceOntology(ontology)
-        featureSet.setOntology(ontology)
-        featureSet.populateFromFile(filePath)
-        self._updateRepo(self._registry.insertFeatureSet, featureSet)
+        feature_set = sql.Gff3DbFeatureSet(name, filePath)
+        feature_set.dataset = dataset
+        feature_set.reference_set = reference_set
+        feature_set.ontology = ontology
+        self._registry.add_feature_set(feature_set)
 
     def removeFeatureSet(self):
         """
         Removes a feature set from this repo
         """
         self._openRepo()
-        dataset = self._registry.getDatasetByName(self._args.datasetName)
-        featureSet = dataset.getFeatureSetByName(self._args.featureSetName)
+        feature_set = self._registry.get_feature_set_by_name(
+            self._args.datasetName, self._args.featureSetName)
 
         def func():
-            self._updateRepo(self._registry.removeFeatureSet, featureSet)
-        self._confirmDelete("FeatureSet", featureSet.getLocalId(), func)
+            self._registry.remove(feature_set)
+        self._confirmDelete("FeatureSet", feature_set.name, func)
 
     def addBioSample(self):
         """

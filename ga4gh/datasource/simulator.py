@@ -316,3 +316,156 @@ class SimulatedReadGroup(registry.ReadGroup):
             aligned_read_count=random.randint(0, 100),
             unaligned_read_count=random.randint(0, 100),
             base_count=random.randint(0, 100))
+
+#####################################################################
+#
+# Features.
+#
+#####################################################################
+
+
+class SimulatedFeatureSet(registry.FeatureSet):
+    """
+    Simulated data backend for FeatureSet, used for internal testing.
+    """
+
+    __tablename__ = 'SimulatedFeatureSet'
+
+    id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey('FeatureSet.id'),
+        primary_key=True)
+    random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'SimulatedFeatureSet',
+    }
+
+    def __init__(self, name, random_seed=1):
+        super(SimulatedFeatureSet, self).__init__(name)
+        self.random_seed = random_seed
+
+    def _getRandomfeatureType(self, randomNumberGenerator):
+        ontologyTuples = [
+            ("gene", "SO:0000704"),
+            ("exon", "SO:0000147")]
+        term = protocol.OntologyTerm()
+        ontologyTuple = randomNumberGenerator.choice(ontologyTuples)
+        term.term, term.id = ontologyTuple[0], ontologyTuple[1]
+        term.source_name = "sequenceOntology"
+        term.source_version = "0"
+        return term
+
+    def _generateSimulatedFeature(self, randomNumberGenerator):
+        feature = protocol.Feature()
+        feature.feature_set_id = self.getId()
+        feature.start = randomNumberGenerator.randint(1000, 2000)
+        feature.end = feature.start + randomNumberGenerator.randint(1, 100)
+        feature.feature_type.CopyFrom(self._getRandomfeatureType(
+            randomNumberGenerator))
+        strands = [protocol.POS_STRAND, protocol.NEG_STRAND]
+        feature.strand = randomNumberGenerator.choice(strands)
+        attributes = {
+            "gene_name": "Frances",
+            "gene_type": "mRNA",
+            "gene_status": "UNKNOWN"}
+        for key, value in attributes.items():
+            feature.attributes.vals[key].values.add().string_value = value
+        return feature
+
+    def getFeature(self, compoundId):
+        """
+        Fetches a simulated feature by ID.
+
+        :param compoundId: any non-null string
+        :return: A simulated feature with id set to the same value as the
+            passed-in compoundId.
+        ":raises: exceptions.ObjectWithIdNotFoundException if None is passed
+            in for the compoundId.
+        """
+        if compoundId is None:
+            raise exceptions.ObjectWithIdNotFoundException(compoundId)
+        randomNumberGenerator = random.Random()
+        randomNumberGenerator.seed(self._randomSeed)
+        feature = self._generateSimulatedFeature(randomNumberGenerator)
+        feature.id = str(compoundId)
+        feature.parent_id = ""  # TODO: Test with nonempty parentIDs?
+        return feature
+
+    def getFeatures(
+            self, referenceName, start, end,
+            pageToken, pageSize,
+            featureTypes=[], parentId=None, numFeatures=10):
+        """
+        Returns a set number of simulated features.
+
+        :param referenceName: name of reference to "search" on
+        :param start: start coordinate of query
+        :param end: end coordinate of query
+        :param pageToken: None or int
+        :param pageSize: None or int
+        :param featureTypes: optional list of ontology terms to limit query
+        :param parentId: optional parentId to limit query.
+        :param numFeatures: number of features to generate in the return.
+            10 is a reasonable (if arbitrary) default.
+        :return: Yields feature, nextPageToken pairs.
+            nextPageToken is None if last feature was yielded.
+        """
+        randomNumberGenerator = random.Random()
+        randomNumberGenerator.seed(self._randomSeed)
+        if pageToken:
+            nextPageToken = int(pageToken)
+        else:
+            nextPageToken = 0
+        for featureId in range(numFeatures):
+            gaFeature = self._generateSimulatedFeature(randomNumberGenerator)
+            gaFeature.id = self.getCompoundIdForFeatureId(featureId)
+            match = (
+                gaFeature.start < end and
+                gaFeature.end > start and
+                gaFeature.reference_name == referenceName and (
+                    featureTypes is None or len(featureTypes) == 0 or
+                    gaFeature.feature_type in featureTypes))
+            if match:
+                gaFeature.parent_id = ""  # TODO: Test nonempty parentIDs?
+                if nextPageToken < numFeatures - 1:
+                    nextPageToken += 1
+                else:
+                    nextPageToken = None
+                yield gaFeature, (
+                    str(nextPageToken)
+                    if nextPageToken is not None else None)
+
+    def generate_feature(self, reference_name, position):
+        rng = random.Random()
+        rng.seed(self.random_seed + position)
+        feature = protocol.Feature()
+        feature.feature_set_id = str(self.id)
+        feature.start = position
+        feature.end = feature.start + rng.randint(1, 100)
+        feature.feature_type.CopyFrom(self._getRandomfeatureType(rng))
+        feature.reference_name = reference_name
+        strands = [protocol.POS_STRAND, protocol.NEG_STRAND]
+        feature.strand = rng.choice(strands)
+        attributes = {
+            "gene_name": "Frances",
+            "gene_type": "mRNA",
+            "gene_status": "UNKNOWN"}
+        for key, value in attributes.items():
+            feature.attributes.vals[key].values.add().string_value = value
+        return feature
+
+    def run_search(self, request, response_builder):
+        # TODO abstract this code so it can be shared with other simulators.
+        start = request.start
+        if request.page_token:
+            try:
+                start = int(request.page_token)
+            except ValueError:
+                raise exceptions.BadPageTokenException(request.page_token)
+        i = start
+        while i < request.end and not response_builder.isFull():
+            response_builder.addValue(
+                self.generate_feature(request.reference_name, i))
+            i += 1
+        if i != request.end:
+            response_builder.setNextPageToken(str(i))

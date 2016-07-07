@@ -32,7 +32,8 @@ class TestSimulatedStack(unittest.TestCase):
         registry_db = utils.create_simulated_registry_db(
             db_url=db_url, random_seed=1111, num_calls=5, num_variant_sets=4,
             num_reference_sets=3, num_references_per_reference_set=4,
-            num_read_group_sets=3, num_read_groups_per_read_group_set=2)
+            num_read_group_sets=3, num_read_groups_per_read_group_set=2,
+            num_feature_sets=5)
         registry_db.close()
         config = {
 <<<<<<< HEAD
@@ -207,11 +208,13 @@ class TestSimulatedStack(unittest.TestCase):
         self.assertEqual(gaReferenceSet.is_derived, referenceSet.is_derived)
         self.assertEqual(gaReferenceSet.name, referenceSet.name)
 
-    def verifyFeatureSetsEqual(self, gaFeatureSet, featureSet):
-        dataset = featureSet.getParentContainer()
-        self.assertEqual(gaFeatureSet.id, featureSet.id)
-        self.assertEqual(gaFeatureSet.dataset_id, dataset.id)
-        self.assertEqual(gaFeatureSet.name, featureSet.getLocalId())
+    def verifyFeatureSetsEqual(self, ga_feature_set, feature_set):
+        dataset = feature_set.dataset
+        self.assertEqual(ga_feature_set.id, str(feature_set.id))
+        self.assertEqual(ga_feature_set.dataset_id, str(dataset.id))
+        self.assertEqual(ga_feature_set.name, feature_set.name)
+        self.assertEqual(ga_feature_set.source_uri, feature_set.source_uri)
+        # TODO compare info values.
 
     def verifyFeaturesEquivalent(self, f1, f2):
         # at least modulo featureId. They can obviously have different
@@ -768,24 +771,22 @@ class TestSimulatedStack(unittest.TestCase):
                                          SearchVariantAnnotationsResponse)
         self.assertGreater(len(responseData.variant_annotations), 0)
 
-    @unittest.skip("TODO Features")
     def testGetFeatureSet(self):
         path = "/featuresets"
         for dataset in self.registry_db.get_datasets():
-            for featureSet in dataset.getFeatureSets():
+            for featureSet in dataset.feature_sets:
                 responseObject = self.sendGetObject(
                     path, featureSet.id, protocol.FeatureSet)
                 self.verifyFeatureSetsEqual(responseObject, featureSet)
         for badId in self.getBadIds():
             self.verifyGetMethodFails(path, badId)
 
-    @unittest.skip("TODO Features")
     def testFeatureSetsSearch(self):
         path = '/featuresets/search'
         for dataset in self.registry_db.get_datasets():
-            featureSets = dataset.getFeatureSets()
+            featureSets = list(dataset.feature_sets)
             request = protocol.SearchFeatureSetsRequest()
-            request.dataset_id = dataset.id
+            request.dataset_id = str(dataset.id)
             self.verifySearchMethod(
                 request, path, protocol.SearchFeatureSetsResponse, featureSets,
                 self.verifyFeatureSetsEqual)
@@ -794,19 +795,20 @@ class TestSimulatedStack(unittest.TestCase):
             request.dataset_id = badId
             self.verifySearchMethodFails(request, path)
 
-    @unittest.skip("TODO Features")
+    @unittest.skip("TODO simulatoed feature Compound IDs")
     def testGetFeature(self):
         dataset = self.registry_db.get_datasets()[0]
-        featureSet = dataset.getFeatureSets()[0]
+        featureSet = dataset.feature_sets[0]
         request = protocol.SearchFeaturesRequest()
-        request.feature_set_id = featureSet.id
+        request.feature_set_id = str(featureSet.id)
         request.reference_name = "chr1"
         request.start = 0
-        request.end = 2**16
+        request.end = 10
         path = '/features/search'
         responseData = self.sendSearchRequest(
             path, request, protocol.SearchFeaturesResponse)
-        features = responseData.features[:10]
+        features = responseData.features
+        self.assertGreater(len(features), 0)
 
         # get 'the same' feature using the get method
         for feature in features:
@@ -815,39 +817,27 @@ class TestSimulatedStack(unittest.TestCase):
                 path, feature.id, protocol.Feature)
             self.verifyFeaturesEquivalent(responseObject, feature)
 
-    @unittest.skip("TODO Features")
     def testFeaturesSearch(self):
         dataset = self.registry_db.get_datasets()[0]
-        featureSet = dataset.getFeatureSets()[0]
-        referenceName = 'chr1'
+        featureSet = dataset.feature_sets[0]
+        referenceName = featureSet.reference_set.references[0].name
 
         request = protocol.SearchFeaturesRequest()
         request.reference_name = referenceName
-        request.feature_set_id = featureSet.id
+        request.feature_set_id = str(featureSet.id)
 
-        # Request window is outside of simulated dataset bounds, no results
+        path = "/features/search"
         request.start = 0
-        request.end = 1
-        request.parent_id = ''
-        path = '/features/search'
+        request.end = 10
         responseData = self.sendSearchRequest(
             path, request, protocol.SearchFeaturesResponse)
-        self.assertEqual('', responseData.next_page_token)
-        self.assertEqual(0, len(responseData.features))
-
-        # Larger request window, expect results
-        request.start = 0
-        request.end = 2 ** 16
-        responseData = self.sendSearchRequest(
-            path, request, protocol.SearchFeaturesResponse)
-
-        self.assertGreater(len(responseData.features), 0)
+        self.assertEqual(len(responseData.features), 10)
 
         # Verify all results are in the correct range, set and reference
         for feature in responseData.features:
             self.assertGreaterEqual(feature.start, 0)
-            self.assertLessEqual(feature.end, 2 ** 16)
-            self.assertEqual(feature.feature_set_id, featureSet.id)
+            self.assertGreaterEqual(feature.end, feature.start)
+            self.assertEqual(feature.feature_set_id, str(featureSet.id))
             self.assertEqual(feature.reference_name, referenceName)
 
     def testListReferenceBases(self):

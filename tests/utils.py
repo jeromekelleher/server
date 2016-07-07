@@ -162,7 +162,7 @@ def create_simulated_registry_db(
         db_url="sqlite:///:memory:", random_seed=1, num_datasets=3,
         num_reference_sets=3, num_references_per_reference_set=3,
         num_variant_sets=3, num_calls=3, num_read_group_sets=3,
-        num_read_groups_per_read_group_set=3):
+        num_read_groups_per_read_group_set=3, num_feature_sets=3):
     """
     Creates an in-memory registry DB, and populates it with random data
     according to the specified parameters.
@@ -197,4 +197,11 @@ def create_simulated_registry_db(
             read_group_set.dataset = dataset
             read_group_set.reference_set = random.choice(reference_sets)
             registry_db.add_read_group_set(read_group_set)
+        for k in range(num_feature_sets):
+            feature_set = simulator.SimulatedFeatureSet(
+                "sim_feature_set_{}".format(k),
+                random_seed=random.randint(0, 2**31))
+            feature_set.dataset = dataset
+            feature_set.reference_set = random.choice(reference_sets)
+            registry_db.add_feature_set(feature_set)
     return registry_db

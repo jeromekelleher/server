@@ -29,10 +29,9 @@ def main(args):
     for dataFile in glob.glob(pattern):
         run("add-referenceset", repoFile, useRelativePath, dataFile)
 
-    # FIXME
-    # pattern = os.path.join(prefix, "ontologies", "*.obo")
-    # for dataFile in glob.glob(pattern):
-    #     run("add-ontology", repoFile, useRelativePath, dataFile)
+    pattern = os.path.join(prefix, "ontologies", "*.obo")
+    for dataFile in glob.glob(pattern):
+        run("add-ontology", repoFile, useRelativePath, dataFile)
 
     datasetName = "dataset1"
     run("add-dataset", repoFile, datasetName)
@@ -52,13 +51,12 @@ def main(args):
             "add-variantset", repoFile, datasetName, useRelativePath,
             dataFile, "-R NCBI37", "-aO", sequenceOntologyName)
 
-    # FIXME
-    # pattern = os.path.join(
-    #     prefix, "datasets/dataset1/sequenceAnnotations", "*.db")
-    # for j, dataFile in enumerate(glob.glob(pattern)):
-    #     run(
-    #         "add-featureset", repoFile, datasetName, useRelativePath,
-    #         dataFile, "-R NCBI37", "-O", sequenceOntologyName)
+    pattern = os.path.join(
+        prefix, "datasets/dataset1/sequenceAnnotations", "*.db")
+    for j, dataFile in enumerate(glob.glob(pattern)):
+        run(
+            "add-featureset", repoFile, datasetName, useRelativePath,
+            dataFile, "-R NCBI37", "-O", sequenceOntologyName)
 
 
 def parseArgs():

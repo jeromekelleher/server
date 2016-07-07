@@ -125,12 +125,11 @@ class AbstractRepoManagerTest(unittest.TestCase):
 
     def getFeatureSet(self):
         repo = self.readRepo()
-        dataset = repo.get_dataset_by_name(self._datasetName)
-        featureSet = dataset.getFeatureSetByName(self._featureSetName)
-        return featureSet
+        feature_set = repo.get_feature_set_by_name(
+            self._datasetName, self._featureSetName)
+        return feature_set
 
 
-@unittest.skip("TODO features")
 class TestAddFeatureSet(AbstractRepoManagerTest):
 
     def setUp(self):
@@ -144,11 +143,9 @@ class TestAddFeatureSet(AbstractRepoManagerTest):
         self.addFeatureSet()
         featureSet = self.getFeatureSet()
         self.assertEqual(featureSet.name, self._featureSetName)
+        self.assertEqual(featureSet.dataset.name, self._datasetName)
         self.assertEqual(
-            featureSet._parentContainer.name, self._datasetName)
-        self.assertEqual(
-            featureSet.getReferenceSet().name,
-            self._referenceSetName)
+            featureSet.reference_set.name, self._referenceSetName)
         # TODO not clear these fields get populated now
         # self.assertEqual(featureSet.getInfo(), "TODO")
         # self.assertEqual(featureSet.getSourceUrl(), "TODO")
@@ -189,7 +186,6 @@ class TestAddFeatureSet(AbstractRepoManagerTest):
             exceptions.RepoManagerException, self.runCommand, cmd)
 
 
-@unittest.skip("TODO features")
 class TestRemoveFeatureSet(AbstractRepoManagerTest):
 
     def setUp(self):
@@ -275,7 +271,6 @@ class TestAddReferenceSet(AbstractRepoManagerTest):
             exceptions.DuplicateNameException, self.runCommand, cmd)
 
 
-@unittest.skip("TODO features")
 class TestAddOntology(AbstractRepoManagerTest):
 
     def setUp(self):
@@ -288,9 +283,9 @@ class TestAddOntology(AbstractRepoManagerTest):
         self.runCommand("add-ontology {} {}".format(
             self._repoPath, ontologyFile))
         repo = self.readRepo()
-        ontology = repo.getOntologyByName(name)
-        self.assertEqual(ontology.getName(), name)
-        self.assertEqual(ontology.getDataUrl(), os.path.abspath(ontologyFile))
+        ontology = repo.get_ontology_by_name(name)
+        self.assertEqual(ontology.name, name)
+        self.assertEqual(ontology.data_url, os.path.abspath(ontologyFile))
 
     def testWithName(self):
         ontologyFile = paths.ontologyPath
@@ -298,9 +293,9 @@ class TestAddOntology(AbstractRepoManagerTest):
         self.runCommand("add-ontology {} {} --name={}".format(
             self._repoPath, ontologyFile, name))
         repo = self.readRepo()
-        ontology = repo.getOntologyByName(name)
-        self.assertEqual(ontology.getName(), name)
-        self.assertEqual(ontology.getDataUrl(), os.path.abspath(ontologyFile))
+        ontology = repo.get_ontology_by_name(name)
+        self.assertEqual(ontology.name, name)
+        self.assertEqual(ontology.data_url, os.path.abspath(ontologyFile))
 
     def testWithSameName(self):
         ontologyFile = paths.ontologyPath
@@ -425,7 +420,6 @@ class TestRemoveReferenceSet(AbstractRepoManagerTest):
         self.assertReferenceSetRemoved()
 
 
-@unittest.skip("FIXME Features")
 class TestVerify(AbstractRepoManagerTest):
 
     def setUp(self):
@@ -781,7 +775,6 @@ class TestDuplicateNameDelete(AbstractRepoManagerTest):
         self.assertEqual(len(list(self.dataset1.variant_sets)), 0)
         self.assertEqual(len(list(self.dataset2.variant_sets)), 1)
 
-    @unittest.skip("TODO features")
     def testFeatureSetDelete(self):
         cmdString = "add-featureset {} {} {} -R {} -O {}"
         addFeatureSetCmd1 = cmdString.format(
@@ -796,8 +789,8 @@ class TestDuplicateNameDelete(AbstractRepoManagerTest):
             self._repoPath, self.dataset1Name, paths.featureSetName)
         self.runCommand(removeCmd)
         self.readDatasets()
-        self.assertEqual(len(self.dataset1.getFeatureSets()), 0)
-        self.assertEqual(len(self.dataset2.getFeatureSets()), 1)
+        self.assertEqual(len(list(self.dataset1.feature_sets)), 0)
+        self.assertEqual(len(list(self.dataset2.feature_sets)), 1)
 
 
 class TestInvalidVariantIndexFile(AbstractRepoManagerTest):

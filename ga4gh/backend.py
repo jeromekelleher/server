@@ -14,8 +14,10 @@ import ga4gh.registry as registry
 # able to load the polymorphic types at run time. These should
 # probably be imported in the frontend so that we are more
 # configurable and open the possibility of a plugin architecture.
-import ga4gh.datasource.simulator as simulator  # noqa
-import ga4gh.datasource.htslib as htslib  # noqa
+import ga4gh.datasource.simulator  # noqa
+import ga4gh.datasource.htslib  # noqa
+import ga4gh.datasource.sql  # noqa
+import ga4gh.datasource.obo  # noqa
 
 
 def _parseIntegerArgument(args, key, defaultValue):
@@ -645,51 +647,45 @@ class Backend(object):
             request, variantAnnotationSet)
         return intervalIterator
 
-    def featuresGenerator(self, request):
+    def featuresGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (features, nextPageToken) pairs
         defined by the (JSON string) request.
         """
-        compoundId = None
-        parentId = None
-        if request.feature_set_id is not None:
-            compoundId = datamodel.FeatureSetCompoundId.parse(  # noqa
-                request.feature_set_id)
-        if request.parent_id and request.parent_id != "":
-            compoundParentId = datamodel.FeatureCompoundId.parse(  # noqa
-                request.parent_id)
-            parentId = compoundParentId.featureId
-            # A client can optionally specify JUST the (compound) parentID,
-            # and the server needs to derive the dataset & featureSet
-            # from this (compound) parentID.
-            if compoundId is None:
-                compoundId = compoundParentId
-            else:
-                # check that the dataset and featureSet of the parent
-                # compound ID is the same as that of the featureSetId
-                mismatchCheck = (
-                    compoundParentId.dataset_id != compoundId.dataset_id or
-                    compoundParentId.feature_set_id !=
-                    compoundId.feature_set_id)
-                if mismatchCheck:
-                    raise exceptions.ParentIncompatibleWithFeatureSet()
+        # compoundId = None
+        # parentId = None
+        # if request.feature_set_id is not None:
+        #     compoundId = datamodel.FeatureSetCompoundId.parse(  # noqa
+        #         request.feature_set_id)
+        # if request.parent_id and request.parent_id != "":
+        #     compoundParentId = datamodel.FeatureCompoundId.parse(  # noqa
+        #         request.parent_id)
+        #     parentId = compoundParentId.featureId
+        #     # A client can optionally specify JUST the (compound) parentID,
+        #     # and the server needs to derive the dataset & featureSet
+        #     # from this (compound) parentID.
+        #     if compoundId is None:
+        #         compoundId = compoundParentId
+        #     else:
+        #         # check that the dataset and featureSet of the parent
+        #         # compound ID is the same as that of the featureSetId
+        #         mismatchCheck = (
+        #             compoundParentId.dataset_id != compoundId.dataset_id or
+        #             compoundParentId.feature_set_id !=
+        #             compoundId.feature_set_id)
+        #         if mismatchCheck:
+        #             raise exceptions.ParentIncompatibleWithFeatureSet()
 
-        if compoundId is None:
-            raise exceptions.FeatureSetNotSpecifiedException()
+        # if compoundId is None:
+        #     raise exceptions.FeatureSetNotSpecifiedException()
 
-        dataset = self._registry_db.getDataset(
-            compoundId.dataset_id)
-        featureSet = dataset.getFeatureSet(compoundId.feature_set_id)
-        if request.start == request.end and request.start == 0:
-            start = None
-            end = None
-        else:
-            start = request.start
-            end = request.end
-        return featureSet.getFeatures(
-            request.reference_name, start, end,
-            request.page_token, request.page_size,
-            request.feature_types, parentId, request.name, request.gene_symbol)
+        # dataset = self._registry_db.getDataset(
+        #     compoundId.dataset_id)
+        # featureSet = dataset.getFeatureSet(compoundId.feature_set_id)
+        # return featureSet.getFeatures(
+        #     request.reference_name, request.start, request.end,
+        #     request.page_token, request.page_size,
+        #     request.feature_types, parentId)
 
     def callSetsGenerator(self, request, responseBuilder):
         """
@@ -717,15 +713,15 @@ class Backend(object):
         #         results.append(obj)
         # return self._objectListGenerator(request, results)
 
-    def featureSetsGenerator(self, request):
+    def featureSetsGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (featureSet, nextPageToken) pairs
         defined by the specified request.
         """
-        dataset = self._registry_db.getDataset(request.dataset_id)
-        return self._topLevelObjectGenerator(
-            request, dataset.getNumFeatureSets(),
-            dataset.getFeatureSetByIndex)
+        # Ensure that the dataset exists.
+        self._registry_db.get_dataset(request.dataset_id)
+        query = self._registry_db.get_feature_sets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
     ###########################################################
     #
@@ -901,10 +897,8 @@ class Backend(object):
         """
         Runs a getFeatureSet request for the specified ID.
         """
-        compoundId = datamodel.FeatureSetCompoundId.parse(id_)  # noqa
-        dataset = self._registry_db.getDataset(compoundId.dataset_id)
-        featureSet = dataset.getFeatureSet(id_)
-        return self.runGetRequest(featureSet)
+        feature_set = self._registry_db.get_feature_set(id_)
+        return self.runGetRequest(feature_set)
 
     def runGetDataset(self, id_):
         """

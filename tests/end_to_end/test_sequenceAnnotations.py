@@ -13,7 +13,6 @@ import ga4gh.frontend as frontend
 import tests.paths as paths
 
 
-@unittest.skip("TODO features")
 class TestSequenceAnnotations(unittest.TestCase):
     exampleUrl = 'www.example.com'
     datasetId = "YnJjYTE"

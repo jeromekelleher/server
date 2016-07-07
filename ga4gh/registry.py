@@ -55,13 +55,16 @@ class Dataset(SqlAlchemyBase):
     name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
     description = sqlalchemy.Column(sqlalchemy.String, nullable=False)
 
-    # We may have a large number of variant and read group sets per dataset,
+    # We may have a large number of child collections per dataset,
     # so we don't want to populate these lists unless we need them.
     variant_sets = orm.relationship(
         "VariantSet", back_populates="dataset", lazy="dynamic",
         cascade="all, delete, delete-orphan")
     read_group_sets = orm.relationship(
         "ReadGroupSet", back_populates="dataset", lazy="dynamic",
+        cascade="all, delete, delete-orphan")
+    feature_sets = orm.relationship(
+        "FeatureSet", back_populates="dataset", lazy="dynamic",
         cascade="all, delete, delete-orphan")
 
     def __init__(self, name):
@@ -776,6 +779,71 @@ class ReadGroupSet(SqlAlchemyBase):
         return ret
 
 
+#####################################################################
+#
+# Features
+#
+#####################################################################
+
+
+class FeatureSet(SqlAlchemyBase):
+    """
+    A set of sequence features annotations
+    """
+    __tablename__ = 'FeatureSet'
+
+    id = create_id_column()
+    """
+    The FeatureSet id. Unique within the repository.
+    """
+
+    name = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+    """
+    The name of this FeatureSet. Unique within a dataset.
+    """
+
+    source_uri = sqlalchemy.Column(sqlalchemy.String, nullable=False)
+
+    dataset_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("Dataset.id"),
+        nullable=False)
+    dataset = orm.relationship(
+        "Dataset", back_populates="feature_sets", single_parent=True)
+    reference_set_id = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
+        nullable=False)
+    reference_set = orm.relationship("ReferenceSet", single_parent=True)
+
+    type = sqlalchemy.Column(sqlalchemy.String)
+    __mapper_args__ = {
+         'polymorphic_identity': 'FeatureSet',
+         'polymorphic_on': type
+    }
+    __table_args__ = (
+        # FeatureSet names must be unique within a dataset
+        sqlalchemy.UniqueConstraint("dataset_id", "name"),
+    )
+
+    def __init__(self, name, source_uri=""):
+        self.name = name
+        self.source_uri = source_uri
+
+    def get_protobuf(self):
+        ret = protocol.FeatureSet()
+        ret.id = str(self.id)
+        ret.name = self.name
+        ret.dataset_id = str(self.dataset_id)
+        ret.source_uri = self.source_uri
+        # TODO Add info values
+        return ret
+
+
+#####################################################################
+#
+# The registry DB.
+#
+#####################################################################
+
 class RegistryDb(object):
     """
     The database representing all of the top-level objects in a given
@@ -841,6 +909,9 @@ class RegistryDb(object):
         metadata.drop_all(self._engine)
         metadata.create_all(self._engine)
 
+    def verify(self):
+        print("NOT IMPLEMENTED YET!!!")
+
     def print_summary(self):
         """
         Prints out a summary of the registry.
@@ -904,6 +975,12 @@ class RegistryDb(object):
         """
         self.__add(read_group_set)
 
+    def add_feature_set(self, feature_set):
+        """
+        Adds the specified feature_set to this data repository.
+        """
+        self.__add(feature_set)
+
     # Object accessors by name.
 
     def get_dataset_by_name(self, name):
@@ -947,6 +1024,19 @@ class RegistryDb(object):
         result = query.first()
         if result is None:
             raise exceptions.VariantSetNameNotFoundException(name)
+        return result
+
+    def get_feature_set_by_name(self, dataset_name, name):
+        """
+        Returns the feature_set with the specified name from the dataset
+        with the specified name.
+        """
+        query = self._session.query(FeatureSet).join(FeatureSet.dataset)
+        query = query.filter(
+            FeatureSet.name == name, Dataset.name == dataset_name)
+        result = query.first()
+        if result is None:
+            raise exceptions.FeatureSetNameNotFoundException(name)
         return result
 
     def get_read_group_set_by_name(self, dataset_name, name):
@@ -1017,6 +1107,17 @@ class RegistryDb(object):
             VariantSet.id == id_).first()
         if result is None:
             raise exceptions.VariantSetNotFoundException(id_)
+        return result
+
+    def get_feature_set(self, id_):
+        """
+        Retuns the FeatureSet with the specified ID, or raises a
+        FeatureSetNotFoundException if it does not exist.
+        """
+        result = self._session.query(FeatureSet).filter(
+            FeatureSet.id == id_).first()
+        if result is None:
+            raise exceptions.FeatureSetNotFoundException(id_)
         return result
 
     def get_reference_set(self, id_):
@@ -1100,6 +1201,15 @@ class RegistryDb(object):
         """
         query = self._session.query(VariantSet).filter(
             VariantSet.dataset_id == request.dataset_id)
+        return query
+
+    def get_feature_sets_search_query(self, request):
+        """
+        Returns the query object representing all the rows in the specified
+        SearchFeatureSets request.
+        """
+        query = self._session.query(FeatureSet).filter(
+            FeatureSet.dataset_id == request.dataset_id)
         return query
 
     def get_call_sets_search_query(self, request):
