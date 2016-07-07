@@ -9,7 +9,6 @@ from __future__ import unicode_literals
 import collections
 import hashlib
 import os
-import random
 
 import pysam
 import sqlalchemy
@@ -120,7 +119,6 @@ class SamFlags(object):
         return flagAttr | flag
 
 
-
 class PysamMixin(object):
     """
     A mixin class to simplify working with DatamodelObjects based on
@@ -222,13 +220,14 @@ class HtslibReference(registry.Reference, PysamMixin):
         primary_key=True)
     fasta_url = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     __mapper_args__ = {
-        'polymorphic_identity':'HtslibReference',
+        'polymorphic_identity': 'HtslibReference',
     }
 
     def run_get_bases(self, start, end):
         fasta_file = self.get_file_handle(pysam.FastaFile, self.fasta_url)
         bases = fasta_file.fetch(self.name.encode(), start, end)
         return bases
+
 
 class HtslibReferenceSet(registry.ReferenceSet):
     __tablename__ = 'HtslibReferenceSet'
@@ -237,7 +236,7 @@ class HtslibReferenceSet(registry.ReferenceSet):
         primary_key=True)
 
     __mapper_args__ = {
-        'polymorphic_identity':'HtslibReferenceSet',
+        'polymorphic_identity': 'HtslibReferenceSet',
     }
 
     def __init__(self, name, fasta_url):
@@ -285,7 +284,7 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         "VcfFile", cascade="all, delete-orphan", lazy="dynamic")
 
     __mapper_args__ = {
-        'polymorphic_identity':'HtslibVariantSet',
+        'polymorphic_identity': 'HtslibVariantSet',
     }
 
     def __init__(self, name, data_urls, index_urls):
@@ -307,10 +306,10 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         reference_names = set()
         for vcf_file in self.vcf_files:
             reference_name = vcf_file.reference_name
-            if reference_name in self.vcf_files:
+            if reference_name in reference_names:
                 raise exceptions.OverlappingVcfException(
                     vcf_file.data_url, reference_name)
-
+            reference_names.add(reference_name)
 
     def _add_vcf_file(self, var_file, data_url, index_file):
         """
@@ -326,8 +325,8 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
             # overlapping errors.
             if not is_empty_iter(var_file.fetch(reference_name)):
                 # We add an instance of VcfFile for each reference within the
-                # VCF because we need to find the file that maps to a particular
-                # reference.
+                # VCF because we need to find the file that maps to a
+                # particular reference.
                 self.vcf_files.append(
                     VcfFile(data_url, index_file, reference_name))
 
@@ -338,7 +337,6 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
     def _update_metadata(self, var_file):
         if len(self.variant_set_metadata) == 0:
             self.variant_set_metadata = self._getMetadataFromVcf(var_file)
-
 
     def _updateCallSetIds(self, variantFile):
         """
@@ -385,7 +383,6 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
                         number="{}".format(value.number),
                         description=description))
         return ret
-
 
     def _update_ga_call(self, ga_call, pysam_call):
         phaseset = ""
@@ -460,7 +457,6 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
                 pysam.VariantFile, vcf_file.data_url,
                 index_filename=vcf_file.index_url)
             the_start = request.start
-            skip_required = False
             if request.page_token:
                 compound_id = registry.VariantCompoundId.parse(
                     request.page_token)
@@ -503,7 +499,7 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
                 return variant
             elif record.start > start:
                 raise exceptions.ObjectNotFoundException()
-        raise exceptions.ObjectNotFoundException(compoundId)
+        raise exceptions.ObjectNotFoundException(compound_id)
 
 
 ##################################################
@@ -514,6 +510,7 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
 
 
 class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
+
     __tablename__ = 'HtslibReadGroupSet'
     id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey('ReadGroupSet.id'),
@@ -526,7 +523,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
     """
 
     __mapper_args__ = {
-        'polymorphic_identity':'HtslibReadGroupSet',
+        'polymorphic_identity': 'HtslibReadGroupSet',
     }
 
     def __init__(self, name, data_url, index_url):
@@ -622,8 +619,6 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             elif self.assembly_identifier != name:
                 raise exceptions.MultipleReferenceSetsInReadGroupSet(
                     self.data_url, name, self.assembly_identifier)
-
-
 
     def convertReadAlignment(self, samFile, read, reference):
         """
@@ -813,8 +808,5 @@ class PysamFileHandleCache(object):
             return handle
 
 
-
 # LRU cache of open file handles
 file_handle_cache = PysamFileHandleCache()
-
-

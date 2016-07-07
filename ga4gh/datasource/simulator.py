@@ -10,9 +10,9 @@ import random
 import hashlib
 
 import sqlalchemy
-import sqlalchemy.orm as orm
 
 import ga4gh.registry as registry
+import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
 
 
@@ -24,7 +24,7 @@ class SimulatedReferenceSet(registry.ReferenceSet):
     random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
     __mapper_args__ = {
-        'polymorphic_identity':'SimulatedReferenceSet',
+        'polymorphic_identity': 'SimulatedReferenceSet',
     }
 
     def __init__(
@@ -51,6 +51,7 @@ class SimulatedReferenceSet(registry.ReferenceSet):
             self.references.append(reference)
         self._compute_md5checksum()
 
+
 class SimulatedReference(registry.Reference):
     __tablename__ = 'SimulatedReference'
     id = sqlalchemy.Column(
@@ -59,7 +60,7 @@ class SimulatedReference(registry.Reference):
     bases = sqlalchemy.Column(sqlalchemy.String, nullable=False)
 
     __mapper_args__ = {
-        'polymorphic_identity':'SimulatedReference',
+        'polymorphic_identity': 'SimulatedReference',
     }
 
     def __init__(self, name, random_seed, length):
@@ -92,7 +93,7 @@ class SimulatedVariantSet(registry.VariantSet):
     random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
     __mapper_args__ = {
-        'polymorphic_identity':'SimulatedVariantSet',
+        'polymorphic_identity': 'SimulatedVariantSet',
     }
 
     def __init__(
@@ -191,7 +192,7 @@ class SimulatedReadGroupSet(registry.ReadGroupSet):
     random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
     __mapper_args__ = {
-        'polymorphic_identity':'SimulatedReadGroupSet',
+        'polymorphic_identity': 'SimulatedReadGroupSet',
     }
 
     def __init__(self, name, random_seed=1, num_read_groups=2):
@@ -219,7 +220,7 @@ class SimulatedReadGroup(registry.ReadGroup):
     random_seed = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
     __mapper_args__ = {
-        'polymorphic_identity':'SimulatedReadGroup',
+        'polymorphic_identity': 'SimulatedReadGroup',
     }
 
     def __init__(self, name, sample_id, random_seed=1):
@@ -261,7 +262,6 @@ class SimulatedReadGroup(registry.ReadGroup):
         # alignment.id = self._parentContainer.getReadAlignmentId(alignment)
         return alignment
 
-
     def run_search(self, request, reference, response_builder):
         # TODO abstract this so that we can share this paging code with
         # the variant set.
@@ -278,5 +278,3 @@ class SimulatedReadGroup(registry.ReadGroup):
             i += 1
         if i != request.end:
             response_builder.setNextPageToken(str(i))
-
-

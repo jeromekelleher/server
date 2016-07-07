@@ -40,6 +40,7 @@ def create_timestamp_column():
 
 SqlAlchemyBase = sqlalchemy.ext.declarative.declarative_base()
 
+
 class Info(SqlAlchemyBase):
     """
     A generic key-value table used to store info maps used in various
@@ -53,7 +54,6 @@ class Info(SqlAlchemyBase):
         sqlalchemy.Integer, primary_key=True, autoincrement=True)
     key = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
     value = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-
 
 
 class Dataset(SqlAlchemyBase):
@@ -89,12 +89,13 @@ class Reference(SqlAlchemyBase):
     reference_set_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("ReferenceSet.id"),
         nullable=False)
-    reference_set = orm.relationship("ReferenceSet", back_populates="references")
+    reference_set = orm.relationship(
+        "ReferenceSet", back_populates="references")
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
-         'polymorphic_identity':'Reference',
-         'polymorphic_on':type
+         'polymorphic_identity': 'Reference',
+         'polymorphic_on': type
     }
     __table_args__ = (
         # Reference names must be unique within a reference set.
@@ -147,9 +148,10 @@ class ReferenceSet(SqlAlchemyBase):
         cascade="all, delete, delete-orphan")
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
-         'polymorphic_identity':'ReferenceSet',
-         'polymorphic_on':type
+         'polymorphic_identity': 'ReferenceSet',
+         'polymorphic_on': type
     }
+
     def __init__(self, name):
         self.name = name
         self.assembly_id = ""
@@ -180,6 +182,7 @@ class ReferenceSet(SqlAlchemyBase):
         # ret.source_accessions.extend(self.getSourceAccessions())
         ret.source_uri = self.source_uri
         return ret
+
 
 class VariantSetMetadata(SqlAlchemyBase):
     __tablename__ = "VariantSetMetadata"
@@ -285,8 +288,8 @@ class VariantSet(SqlAlchemyBase):
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
-         'polymorphic_identity':'VariantSet',
-         'polymorphic_on':type
+         'polymorphic_identity': 'VariantSet',
+         'polymorphic_on': type
     }
     __table_args__ = (
         # VariantSet names must be unique within a dataset
@@ -307,7 +310,6 @@ class VariantSet(SqlAlchemyBase):
         return ret
 
 
-
 class ReadStats(SqlAlchemyBase):
     __tablename__ = 'ReadStats'
 
@@ -318,7 +320,7 @@ class ReadStats(SqlAlchemyBase):
     base_count = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
     def __init__(
-        self, aligned_read_count=0, unaligned_read_count=0, base_count=0):
+            self, aligned_read_count=0, unaligned_read_count=0, base_count=0):
         self.aligned_read_count = aligned_read_count
         self.unaligned_read_count = unaligned_read_count
         self.base_count = base_count
@@ -327,6 +329,7 @@ class ReadStats(SqlAlchemyBase):
         stats.aligned_read_count = self.aligned_read_count
         stats.unaligned_read_count = self.unaligned_read_count
         stats.base_count = self.base_count
+
 
 class Program(SqlAlchemyBase):
     __tablename__ = 'Program'
@@ -341,7 +344,7 @@ class Program(SqlAlchemyBase):
         nullable=False)
 
     def __init__(
-        self, name="", version="", command_line="", prev_program_id=""):
+            self, name="", version="", command_line="", prev_program_id=""):
         self.name = name
         self.version = version
         self.command_line = command_line
@@ -355,6 +358,7 @@ class Program(SqlAlchemyBase):
         ret.command_line = self.command_line
         ret.prev_program_id = self.prev_program_id
         return ret
+
 
 class Experiment(SqlAlchemyBase):
     __tablename__ = 'Experiment'
@@ -370,8 +374,8 @@ class Experiment(SqlAlchemyBase):
     run_time = sqlalchemy.Column(sqlalchemy.String, nullable=False)
 
     def __init__(
-        self, instrument_model="", sequencing_center="", description="",
-        library="", platform_unit="", run_time=""):
+            self, instrument_model="", sequencing_center="", description="",
+            library="", platform_unit="", run_time=""):
         self.instrument_model = instrument_model
         self.sequencing_center = sequencing_center
         self.description = description
@@ -396,6 +400,11 @@ class Experiment(SqlAlchemyBase):
 
 
 class ReadGroup(SqlAlchemyBase):
+    """
+    Class representing a ReadGroup. A ReadGroup is all the data that's
+    processed the same way by the sequencer.  There are typically 1-10
+    ReadGroups in a ReadGroupSet.
+    """
     __tablename__ = 'ReadGroup'
 
     id = create_id_column()
@@ -421,12 +430,13 @@ class ReadGroup(SqlAlchemyBase):
         sqlalchemy.Integer, sqlalchemy.ForeignKey("Experiment.id"),
         nullable=False)
     experiment = orm.relationship(
-        "Experiment",  cascade="all, delete, delete-orphan", single_parent=True)
+        "Experiment",  cascade="all, delete, delete-orphan",
+        single_parent=True)
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
-         'polymorphic_identity':'ReadGroup',
-         'polymorphic_on':type
+         'polymorphic_identity': 'ReadGroup',
+         'polymorphic_on': type
     }
     __table_args__ = (
         # ReadGroup names must be unique within a read group set.
@@ -462,8 +472,8 @@ class ReadGroup(SqlAlchemyBase):
         return ret
 
 
-
 class ReadGroupSet(SqlAlchemyBase):
+
     __tablename__ = 'ReadGroupSet'
 
     id = create_id_column()
@@ -493,8 +503,8 @@ class ReadGroupSet(SqlAlchemyBase):
 
     type = sqlalchemy.Column(sqlalchemy.String)
     __mapper_args__ = {
-         'polymorphic_identity':'ReadGroupSet',
-         'polymorphic_on':type
+         'polymorphic_identity': 'ReadGroupSet',
+         'polymorphic_on': type
     }
     __table_args__ = (
         # ReadGroupSet names must be unique within a dataset
@@ -591,45 +601,47 @@ class RegistryDb(object):
 
     # Top level API to add objects to the data repository.
 
+    def _is_unique_name_violation(self, integrity_error):
+        """
+        Returns True if the specified exception corresponds to a
+        unique name violation.
+        """
+        # This seems to work for Postgres and Sqlite...
+        return "name" in str(integrity_error.orig)
+
+    def __add(self, db_object):
+        try:
+            self._session.add(db_object)
+            self._session.commit()
+        except sqlalchemy.exc.IntegrityError as ie:
+            if self._is_unique_name_violation(ie):
+                raise exceptions.DuplicateNameException(db_object.name)
+            else:
+                raise ie
+
     def add_reference_set(self, reference_set):
         """
         Adds the specified reference set to this data repository.
         """
-        try:
-            self._session.add(reference_set)
-            self._session.commit()
-        except sqlalchemy.exc.IntegrityError as ie:
-            raise exceptions.DuplicateNameException(reference_set.name)
+        self.__add(reference_set)
 
     def add_dataset(self, dataset):
         """
         Adds the specified dataset to this data repository.
         """
-        try:
-            self._session.add(dataset)
-            self._session.commit()
-        except sqlalchemy.exc.IntegrityError as ie:
-            raise exceptions.DuplicateNameException(dataset.name)
+        self.__add(dataset)
 
     def add_variant_set(self, variant_set):
         """
         Adds the specified variant_set to this data repository.
         """
-        try:
-            self._session.add(variant_set)
-            self._session.commit()
-        except sqlalchemy.exc.IntegrityError as ie:
-            raise exceptions.DuplicateNameException(variant_set.name)
+        self.__add(variant_set)
 
     def add_read_group_set(self, read_group_set):
         """
         Adds the specified variant_set to this data repository.
         """
-        try:
-            self._session.add(read_group_set)
-            self._session.commit()
-        except sqlalchemy.exc.IntegrityError as ie:
-            raise exceptions.DuplicateNameException(read_group_set.name)
+        self.__add(read_group_set)
 
     # Object accessors by name.
 
@@ -675,7 +687,6 @@ class RegistryDb(object):
             raise exceptions.ReadGroupSetNameNotFoundException(name)
         return result
 
-
     # Object accessors by ID. These are run when the corresponding GET request
     # is received.
 
@@ -684,7 +695,8 @@ class RegistryDb(object):
         Retuns the ReadGroup with the specified ID, or raises a
         ReadGroupNotFoundException if it does not exist.
         """
-        result = self._session.query(ReadGroup).filter(ReadGroup.id == id_).first()
+        result = self._session.query(ReadGroup).filter(
+            ReadGroup.id == id_).first()
         if result is None:
             raise exceptions.ReadGroupNotFoundException(id_)
         return result
@@ -768,9 +780,11 @@ class RegistryDb(object):
         """
         query = self._session.query(ReferenceSet)
         if request.md5checksum:
-            query = query.filter(ReferenceSet.md5checksum == request.md5checksum)
+            query = query.filter(
+                ReferenceSet.md5checksum == request.md5checksum)
         if request.assembly_id:
-            query = query.filter(ReferenceSet.assembly_id == request.assembly_id)
+            query = query.filter(
+                ReferenceSet.assembly_id == request.assembly_id)
         return query
 
     def get_datasets_search_query(self, request):
@@ -795,7 +809,8 @@ class RegistryDb(object):
         SearchCallSets request.
         """
         query = self._session.query(CallSet)
-        query = query.filter(CallSet.variant_sets.any(id=request.variant_set_id))
+        query = query.filter(
+            CallSet.variant_sets.any(id=request.variant_set_id))
         if request.name:
             query = query.filter(CallSet.name == request.name)
         return query
@@ -999,6 +1014,9 @@ class CompoundId(object):
         return cls.join(['notValid'] * len(cls.fields))
 
 
+# TODO these are specific to the htslib implementation. We need an abstract
+# class that just encodes the variant set id, and sub classes can add in
+# what they want after that.
 class VariantCompoundId(CompoundId):
     """
     The compound id for a variant
@@ -1011,4 +1029,3 @@ class ReadAlignmentCompoundId(CompoundId):
     The compound id for a variant
     """
     fields = ['read_group_id', 'reference_id', 'position', 'fragment_name']
-
