@@ -508,6 +508,7 @@ class Backend(object):
         return self._objectListGenerator(request, results)
 
     def readGroupSetsGenerator(self, request, responseBuilder):
+<<<<<<< HEAD
         # """
         # Returns a generator over the (readGroupSet, nextPageToken) pairs
         # defined by the specified request.
@@ -536,7 +537,13 @@ class Backend(object):
         #     if include:
         #         results.append(rgsp)
         # return self._protocolListGenerator(request, results)
-        query = self._dataRepository.get_read_group_sets_search_query(request)
+        """
+        Returns a generator over the (readGroupSet, nextPageToken) pairs
+        defined by the specified request.
+        """
+        # Ensure that the dataset exists.
+        self._registry_db.get_dataset(request.dataset_id)
+        query = self._registry_db.get_read_group_sets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
     def referenceSetsGenerator(self, request, responseBuilder):
@@ -552,6 +559,8 @@ class Backend(object):
         Returns a generator over the (reference, nextPageToken) pairs
         defined by the specified request.
         """
+        # Ensure that the reference set exists.
+        self._registry_db.get_reference_set(request.reference_set_id)
         query = self._registry_db.get_references_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
@@ -560,6 +569,8 @@ class Backend(object):
         Returns a generator over the (variantSet, nextPageToken) pairs defined
         by the specified request.
         """
+        # Ensure that the dataset exists.
+        self._registry_db.get_dataset(request.dataset_id)
         query = self._registry_db.get_variant_sets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
 
@@ -692,6 +703,8 @@ class Backend(object):
         Returns a generator over the (callSet, nextPageToken) pairs defined
         by the specified request.
         """
+        # Ensure that the variant set exists.
+        self._registry_db.get_variant_set(request.variant_set_id)
         query = self._registry_db.get_call_sets_search_query(request)
         self._run_sql_query(request, query, responseBuilder)
         # compoundId = datamodel.VariantSetCompoundId.parse(

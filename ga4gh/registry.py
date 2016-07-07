@@ -237,6 +237,7 @@ class Reference(SqlAlchemyBase):
         ret.ncbi_taxon_id = self.ncbi_taxon_id
         ret.source_accessions.extend(
             acc.name for acc in self.source_accessions)
+        ret.is_derived = self.is_derived
         ret.source_divergence = self.source_divergence
         ret.source_uri = self.source_uri
         return ret
@@ -246,9 +247,7 @@ class Reference(SqlAlchemyBase):
         Checks to ensure that the query range is valid within this reference.
         If not, raise ReferenceRangeErrorException.
         """
-        condition = (
-            (start < 0 or end > self.length) or start > end)
-        if condition:
+        if start < 0 or end > self.length or start > end:
             raise exceptions.ReferenceRangeErrorException(self.id, start, end)
 
 
@@ -745,6 +744,12 @@ class RegistryDb(object):
 
     # Miscellaneous house-keeping methods for the Registry DB.
 
+    def get_db_url(self):
+        """
+        Returns the SqlAlchemy URL for the underlying database.
+        """
+        return self._db_url
+
     def exists(self):
         """
         Returns True if there is a fully initialised registry in the DB url.
@@ -796,7 +801,7 @@ class RegistryDb(object):
         """
         Prints out a summary of the registry.
         """
-        print("TODO")
+        print("Datasets = ", self._session.query(Dataset).count())
 
     # Top level API to add objects to the data repository.
 
@@ -982,6 +987,9 @@ class RegistryDb(object):
         """
         query = self._session.query(Reference).filter(
             Reference.reference_set_id == request.reference_set_id)
+        if request.accession:
+            query = query.filter(
+                Reference.source_accessions.any(name=request.accession))
         if request.md5checksum:
             query = query.filter(Reference.md5checksum == request.md5checksum)
         return query
@@ -992,6 +1000,9 @@ class RegistryDb(object):
         SearchReferenceSetsRequest.
         """
         query = self._session.query(ReferenceSet)
+        if request.accession:
+            query = query.filter(
+                ReferenceSet.source_accessions.any(name=request.accession))
         if request.md5checksum:
             query = query.filter(
                 ReferenceSet.md5checksum == request.md5checksum)
@@ -1022,6 +1033,8 @@ class RegistryDb(object):
         Returns the query object representing all the rows in the specified
         SearchCallSets request.
         """
+        # First ensure that the variant set exists.
+
         query = self._session.query(CallSet)
         query = query.filter(
             CallSet.variant_sets.any(id=request.variant_set_id))

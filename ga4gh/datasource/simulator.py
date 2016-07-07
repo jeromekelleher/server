@@ -47,13 +47,13 @@ class SimulatedReferenceSet(registry.ReferenceSet):
         rng.seed(random_seed)
 
         self.description = "Simulated reference set"
-        self.assemblyId = str(random.randint(0, 2**32))
-        self.isDerived = bool(random.randint(0, 1))
-        self.ncbiTaxonId = random.randint(0, 2**16)
-        # self._sourceAccessions = []
-        # for i in range(random.randint(1, 3)):
-        #         self._sourceAccessions.append("sim_accession_{}".format(
-        #             random.randint(1, 2**32)))
+        self.assembly_id = str(random.randint(0, 2**32))
+        self.is_derived = bool(random.randint(0, 1))
+        self.ncbi_taxon_id = random.randint(0, 2**16)
+        for i in range(random.randint(1, 3)):
+            accession = registry.Accession(
+                "sim_accession_{}".format(random.randint(1, 2**32)))
+            self.source_accessions.append(accession)
         self._sourceUri = "http://example.com/reference.fa"
         for i in range(num_references):
             reference_seed = rng.getrandbits(32)
@@ -91,10 +91,10 @@ class SimulatedReference(registry.Reference):
         self.source_divergence = 0
         if self.is_derived:
             self.source_divergence = rng.uniform(0, 0.1)
-        # self._sourceAccessions = []
-        # for i in range(random.randint(1, 3)):
-        #         self._sourceAccessions.append("sim_accession_{}".format(
-        #             random.randint(1, 2**32)))
+        for i in range(random.randint(1, 3)):
+            accession = registry.Accession(
+                "sim_accession_{}".format(random.randint(1, 2**32)))
+            self.source_accessions.append(accession)
         self._sourceUri = "http://example.com/reference.fa"
 
     def run_get_bases(self, start, end):
@@ -237,9 +237,49 @@ class SimulatedReadGroupSet(registry.ReadGroupSet):
                 random_seed=random.randint(0, 2**31))
             self.read_groups.append(read_group)
 
-    def run_search(self, request, reference, response_builder):
-        print("Running search on ", request)
+    def generate_alignment(self, reference, read_groups, start):
+        # TODO fill out a bit more
+        rng = random.Random(self.random_seed + start)
+        alignment = protocol.ReadAlignment()
+        alignment.read_group_id = str(rng.choice(read_groups).id)
+        alignment.fragment_length = rng.randint(10, 100)
+        alignment.aligned_sequence = ""
+        for i in range(alignment.fragment_length):
+            # TODO: are these reasonable quality values?
+            alignment.aligned_quality.append(rng.randint(1, 20))
+            alignment.aligned_sequence += rng.choice("ACGT")
 
+        alignment.alignment.position.position = 0
+        alignment.alignment.position.reference_name = "NotImplemented"
+        alignment.alignment.position.strand = protocol.POS_STRAND
+        alignment.duplicate_fragment = False
+        alignment.failed_vendor_quality_checks = False
+
+        alignment.fragment_name = "{}$simulated{}".format(self.name, i)
+        alignment.number_reads = 0
+        alignment.improper_placement = False
+        alignment.read_number = -1
+        alignment.secondary_alignment = False
+        alignment.supplementary_alignment = False
+        # alignment.id = self._parentContainer.getReadAlignmentId(alignment)
+        return alignment
+
+    def run_search(self, request, reference, read_groups, response_builder):
+        # TODO abstract this so that we can share this paging code with
+        # the variant set.
+        start = request.start
+        if request.page_token:
+            try:
+                start = int(request.page_token)
+            except ValueError:
+                raise exceptions.BadPageTokenException(request.page_token)
+        i = start
+        while i < request.end and not response_builder.isFull():
+            response_builder.addValue(
+                self.generate_alignment(reference, read_groups, i))
+            i += 1
+        if i != request.end:
+            response_builder.setNextPageToken(str(i))
 
 class SimulatedReadGroup(registry.ReadGroup):
 
@@ -264,47 +304,3 @@ class SimulatedReadGroup(registry.ReadGroup):
             aligned_read_count=random.randint(0, 100),
             unaligned_read_count=random.randint(0, 100),
             base_count=random.randint(0, 100))
-
-    def generate_alignment(self, reference, start):
-        # TODO fill out a bit more
-        rng = random.Random(self.random_seed + start)
-        alignment = protocol.ReadAlignment()
-        alignment.fragment_length = rng.randint(10, 100)
-        alignment.aligned_sequence = ""
-        for i in range(alignment.fragment_length):
-            # TODO: are these reasonable quality values?
-            alignment.aligned_quality.append(rng.randint(1, 20))
-            alignment.aligned_sequence += rng.choice("ACGT")
-
-        alignment.alignment.position.position = 0
-        alignment.alignment.position.reference_name = "NotImplemented"
-        alignment.alignment.position.strand = protocol.POS_STRAND
-        alignment.duplicate_fragment = False
-        alignment.failed_vendor_quality_checks = False
-
-        alignment.fragment_name = "{}$simulated{}".format(self.name, i)
-        alignment.number_reads = 0
-        alignment.improper_placement = False
-        alignment.read_group_id = str(self.id)
-        alignment.read_number = -1
-        alignment.secondary_alignment = False
-        alignment.supplementary_alignment = False
-        # alignment.id = self._parentContainer.getReadAlignmentId(alignment)
-        return alignment
-
-    def run_search(self, request, reference, response_builder):
-        # TODO abstract this so that we can share this paging code with
-        # the variant set.
-        start = request.start
-        if request.page_token:
-            try:
-                start = int(request.page_token)
-            except ValueError:
-                raise exceptions.BadPageTokenException(request.page_token)
-        i = start
-        while i < request.end and not response_builder.isFull():
-            response_builder.addValue(
-                self.generate_alignment(reference, i))
-            i += 1
-        if i != request.end:
-            response_builder.setNextPageToken(str(i))
