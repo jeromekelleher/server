@@ -6,10 +6,11 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import ga4gh.datamodel as datamodel
+# import ga4gh.datamodel as datamodel
 import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
 
+# import ga4gh.datamodel.references as references
 
 def _parseIntegerArgument(args, key, defaultValue):
     """
@@ -395,7 +396,7 @@ class Backend(object):
             nextPageToken = None
             if currentIndex < numObjects:
                 nextPageToken = str(currentIndex)
-            yield object_.toProtocolElement(), nextPageToken
+            yield object_.get_protobuf(), nextPageToken
 
     def _protocolObjectGenerator(self, request, numObjects, getByIndexMethod):
         """
@@ -446,14 +447,31 @@ class Backend(object):
         """
         return iter([])
 
-    def datasetsGenerator(self, request):
+    def _run_sql_query(self, request, query, responseBuilder):
+        start = 0
+        if request.page_token:
+            start = int(request.page_token)
+        end = start + request.page_size
+        offset = start
+        for result in query[start:end]:
+            offset += 1
+            responseBuilder.addValue(result.get_protobuf())
+            if responseBuilder.isFull():
+                break
+        total_rows = query.count()
+        if offset < total_rows:
+            responseBuilder.setNextPageToken(str(offset))
+
+    def datasetsGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (dataset, nextPageToken) pairs
         defined by the specified request
         """
-        return self._topLevelObjectGenerator(
-            request, self.getDataRepository().getNumDatasets(),
-            self.getDataRepository().getDatasetByIndex)
+        query = self._dataRepository.get_datasets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
+        # return self._topLevelObjectGenerator(
+        #     request, self.getDataRepository().getNumDatasets(),
+        #     self.getDataRepository().getDatasetByIndex)
 
     def bioSamplesGenerator(self, request):
         dataset = self.getDataRepository().getDataset(request.dataset_id)
@@ -512,56 +530,61 @@ class Backend(object):
                 results.append(rgsp)
         return self._protocolListGenerator(request, results)
 
-    def referenceSetsGenerator(self, request):
+
+    def referenceSetsGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (referenceSet, nextPageToken) pairs
         defined by the specified request.
         """
-        results = []
-        for obj in self.getDataRepository().getReferenceSets():
-            include = True
-            if request.md5checksum:
-                if request.md5checksum != obj.getMd5Checksum():
-                    include = False
-            if request.accession:
-                if request.accession not in obj.getSourceAccessions():
-                    include = False
-            if request.assembly_id:
-                if request.assembly_id != obj.getAssemblyId():
-                    include = False
-            if include:
-                results.append(obj)
-        return self._objectListGenerator(request, results)
+        query = self._dataRepository.get_reference_sets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
-    def referencesGenerator(self, request):
+        # results = []
+        # for obj in self.getDataRepository().get_reference_sets():
+        #     include = True
+        #     if request.md5checksum:
+        #         if request.md5checksum != obj.getMd5Checksum():
+        #             include = False
+        #     if request.accession:
+        #         if request.accession not in obj.getSourceAccessions():
+        #             include = False
+        #     if request.assembly_id:
+        #         if request.assembly_id != obj.getAssemblyId():
+        #             include = False
+        #     if include:
+        #         results.append(obj)
+        # return self._objectListGenerator(request, results)
+
+    def referencesGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (reference, nextPageToken) pairs
         defined by the specified request.
         """
-        referenceSet = self.getDataRepository().getReferenceSet(
-            request.reference_set_id)
-        results = []
-        for obj in referenceSet.getReferences():
-            include = True
-            if request.md5checksum:
-                if request.md5checksum != obj.getMd5Checksum():
-                    include = False
-            if request.accession:
-                if request.accession not in obj.getSourceAccessions():
-                    include = False
-            if include:
-                results.append(obj)
-        return self._objectListGenerator(request, results)
+        query = self._dataRepository.get_references_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
-    def variantSetsGenerator(self, request):
+        # referenceSet = self.getDataRepository().getReferenceSet(
+        #     request.reference_set_id)
+        # results = []
+        # for obj in referenceSet.getReferences():
+        #     include = True
+        #     if request.md5checksum:
+        #         if request.md5checksum != obj.getMd5Checksum():
+        #             include = False
+        #     if request.accession:
+        #         if request.accession not in obj.getSourceAccessions():
+        #             include = False
+        #     if include:
+        #         results.append(obj)
+        # return self._objectListGenerator(request, results)
+
+    def variantSetsGenerator(self, request, responseBuilder):
         """
         Returns a generator over the (variantSet, nextPageToken) pairs defined
         by the specified request.
         """
-        dataset = self.getDataRepository().getDataset(request.dataset_id)
-        return self._topLevelObjectGenerator(
-            request, dataset.getNumVariantSets(),
-            dataset.getVariantSetByIndex)
+        query = self._dataRepository.get_variant_sets_search_query(request)
+        self._run_sql_query(request, query, responseBuilder)
 
     def variantAnnotationSetsGenerator(self, request):
         """
@@ -625,17 +648,23 @@ class Backend(object):
             request, readGroupSet, reference)
         return intervalIterator
 
-    def variantsGenerator(self, request):
+    def variantsGenerator(self, request, response_builder):
         """
         Returns a generator over the (variant, nextPageToken) pairs defined
         by the specified request.
         """
-        compoundId = datamodel.VariantSetCompoundId \
-            .parse(request.variant_set_id)
-        dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
-        variantSet = dataset.getVariantSet(compoundId.variant_set_id)
-        intervalIterator = VariantsIntervalIterator(request, variantSet)
-        return intervalIterator
+        print("got requuest", request)
+        variant_set = self._dataRepository.get_variant_set(
+                request.variant_set_id)
+        print("variant set = ", variant_set)
+        variant_set.run_search(request, response_builder)
+
+        # compoundId = datamodel.VariantSetCompoundId \
+        #     .parse(request.variant_set_id)
+        # dataset = self.getDataRepository().getDataset(compoundId.dataset_id)
+        # variantSet = dataset.getVariantSet(compoundId.variant_set_id)
+        # intervalIterator = VariantsIntervalIterator(request, variantSet)
+        # return intervalIterator
 
     def variantAnnotationsGenerator(self, request):
         """
@@ -743,7 +772,7 @@ class Backend(object):
         Runs a get request by converting the specified datamodel
         object into its protocol representation.
         """
-        protocolElement = obj.toProtocolElement()
+        protocolElement = obj.get_protobuf()
         jsonString = protocol.toJson(protocolElement)
         return jsonString
 
@@ -770,12 +799,13 @@ class Backend(object):
             raise exceptions.BadPageSizeException(request.page_size)
         responseBuilder = protocol.SearchResponseBuilder(
             responseClass, request.page_size, self._maxResponseLength)
-        nextPageToken = None
-        for obj, nextPageToken in objectGenerator(request):
-            responseBuilder.addValue(obj)
-            if responseBuilder.isFull():
-                break
-        responseBuilder.setNextPageToken(nextPageToken)
+        # nextPageToken = None
+        # for obj, nextPageToken in objectGenerator(request):
+        #     responseBuilder.addValue(obj)
+        #     if responseBuilder.isFull():
+        #         break
+        # responseBuilder.setNextPageToken(nextPageToken)
+        objectGenerator(request, responseBuilder)
         responseString = responseBuilder.getSerializedResponse()
         self.endProfile()
         return responseString
@@ -892,18 +922,15 @@ class Backend(object):
         """
         Runs a getReference request for the specified ID.
         """
-        compoundId = datamodel.ReferenceCompoundId.parse(id_)
-        referenceSet = self.getDataRepository().getReferenceSet(
-            compoundId.reference_set_id)
-        reference = referenceSet.getReference(id_)
+        reference = self._dataRepository.get_reference(id_)
         return self.runGetRequest(reference)
 
     def runGetReferenceSet(self, id_):
         """
         Runs a getReferenceSet request for the specified ID.
         """
-        referenceSet = self.getDataRepository().getReferenceSet(id_)
-        return self.runGetRequest(referenceSet)
+        reference_set = self.getDataRepository().get_reference_set(id_)
+        return self.runGetRequest(reference_set)
 
     def runGetVariantSet(self, id_):
         """

@@ -10,6 +10,7 @@ import json
 import base64
 import collections
 
+import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
 
 
