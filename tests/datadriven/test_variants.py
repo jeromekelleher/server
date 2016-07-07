@@ -373,7 +373,8 @@ class VariantSetTest(datadriven.DataDrivenTest):
                     self.assertEqual(keyMap[key].number, convertPyvcfNumber(
                         content[contentKey].num))
                     self.assertEqual(
-                        keyMap[key].description, content[contentKey].desc)
+                        keyMap[key].description,
+                        content[contentKey].desc.strip())
         testMetaLength = (
             1 + len(self._formats) + len(self._infos) - gtCounter)
         self.assertEqual(len(keyMap), testMetaLength)

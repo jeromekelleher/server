@@ -26,7 +26,6 @@ This is the name used for the default read group created when there
 are no RG headers in a BAM file.
 """
 
-
 _nothing = object()
 
 
@@ -357,7 +356,7 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
         """
         if self.call_sets.count() == 0:
             for sample in variantFile.header.samples:
-                call_set = registry.CallSet(name=sample, sample_id=sample)
+                call_set = registry.CallSet(name=sample)
                 self.call_sets.append(call_set)
         # TODO check the callsets are already in here as required, or throw
         # an error.
@@ -452,10 +451,10 @@ class HtslibVariantSet(registry.VariantSet, PysamMixin):
                     value = value.split(',')
                 variant.info[key].values.extend(_encodeValue(value))
         for call_set in call_sets:
-            pysam_call = record.samples[call_set.sample_id.encode()]
+            pysam_call = record.samples[call_set.name.encode()]
             ga_call = variant.calls.add()
             ga_call.call_set_id = str(call_set.id)
-            ga_call.call_set_name = str(call_set.sample_id)
+            ga_call.call_set_name = str(call_set.name)
             self._update_ga_call(ga_call, pysam_call)
         variant.id = self.get_variant_id(variant)
         return variant
@@ -642,7 +641,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
         Returns a new read group for the specified SAM RG rg_header.
         """
         read_group = registry.ReadGroup(rg_header['ID'])
-        read_group.sample_id = rg_header.get('SM', "")
+        read_group.sample_name = rg_header.get('SM', "")
         read_group.description = rg_header.get('DS', "")
         read_group.predicted_insert_size = int(rg_header.get('PI', 0))
         read_group.experiment = registry.Experiment(
@@ -667,7 +666,7 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
             # If there is no read group header information, we assume there
             # is a single read group in the file, and give the default name
             read_group = registry.ReadGroup(
-                name=DEFAULT_READGROUP_NAME, sample_id="")
+                name=DEFAULT_READGROUP_NAME)
             self.read_groups.append(read_group)
             self.__update_read_group_stats(read_group)
         else:

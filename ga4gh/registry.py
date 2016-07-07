@@ -73,7 +73,6 @@ class Dataset(SqlAlchemyBase):
         "BioSample", back_populates="dataset", lazy="dynamic",
         cascade="all, delete, delete-orphan")
 
-
     def __init__(self, name):
         self.name = name
         self.description = ""
@@ -88,15 +87,15 @@ class Dataset(SqlAlchemyBase):
 
 class BioSample(SqlAlchemyBase):
     """
-    A BioSample refers to a unit of biological material from which the substrate
-    molecules (e.g. genomic DNA, RNA, proteins) for molecular analyses (e.g.
-    sequencing, array hybridisation, mass-spectrometry) are extracted. Examples
-    would be a tissue biopsy, a single cell from a culture for single cell genome
-    sequencing or a protein fraction from a gradient centrifugation.
-    Several instances (e.g. technical replicates) or types of experiments (e.g.
-    genomic array as well as RNA-seq experiments) may refer to the same BioSample.
-    In the context of the GA4GH metadata schema, BioSample constitutes the central
-    reference object.
+    A BioSample refers to a unit of biological material from which the
+    substrate molecules (e.g. genomic DNA, RNA, proteins) for molecular
+    analyses (e.g. sequencing, array hybridisation, mass-spectrometry) are
+    extracted. Examples would be a tissue biopsy, a single cell from a culture
+    for single cell genome sequencing or a protein fraction from a gradient
+    centrifugation. Several instances (e.g. technical replicates) or types of
+    experiments (e.g. genomic array as well as RNA-seq experiments) may refer
+    to the same BioSample. In the context of the GA4GH metadata schema,
+    BioSample constitutes the central reference object.
     """
     __tablename__ = "BioSample"
 
@@ -145,7 +144,6 @@ class BioSample(SqlAlchemyBase):
         return ret
 
 
-
 class Individual(SqlAlchemyBase):
     """
     An individual (or subject) typically corresponds to an individual
@@ -180,7 +178,6 @@ class Individual(SqlAlchemyBase):
         self.description = ""
         self.sex = ""
 
-
     def get_protobuf(self):
         ret = protocol.Individual()
         ret.id = str(self.id)
@@ -193,9 +190,6 @@ class Individual(SqlAlchemyBase):
         #     self.update_timestamp)
         # TODO sex
         return ret
-
-
-
 
 
 class Info(SqlAlchemyBase):
@@ -584,7 +578,7 @@ class CallSet(SqlAlchemyBase):
 
     bio_sample_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("BioSample.id"),
-        nullable=False)
+        nullable=True)
     bio_sample = orm.relationship("BioSample")
     variant_sets = orm.relationship(
         "VariantSet", secondary=_call_set_association_table,
@@ -594,7 +588,8 @@ class CallSet(SqlAlchemyBase):
         ret = protocol.CallSet()
         ret.id = str(self.id)
         ret.name = self.name
-        ret.bio_sample_id = str(self.bio_sample_id)
+        if self.bio_sample_id is not None:
+            ret.bio_sample_id = str(self.bio_sample_id)
         ret.created = protocol.datetime_to_milliseconds(
             self.creation_timestamp)
         ret.updated = protocol.datetime_to_milliseconds(
@@ -786,9 +781,10 @@ class ReadGroup(SqlAlchemyBase):
     update_timestamp = create_timestamp_column()
     predicted_insert_size = sqlalchemy.Column(
         sqlalchemy.Integer, nullable=False)
+    sample_name = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     bio_sample_id = sqlalchemy.Column(
         sqlalchemy.Integer, sqlalchemy.ForeignKey("BioSample.id"),
-        nullable=False)
+        nullable=True)
     bio_sample = orm.relationship("BioSample")
 
     read_group_set_id = sqlalchemy.Column(
@@ -818,8 +814,9 @@ class ReadGroup(SqlAlchemyBase):
         sqlalchemy.UniqueConstraint("read_group_set_id", "name"),
     )
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, sample_name=None):
         self.name = name
+        self.sample_name = sample_name
         self.description = ""
         self.predicted_insert_size = 0
         self.read_stats = ReadStats()
@@ -831,7 +828,10 @@ class ReadGroup(SqlAlchemyBase):
         ret.id = str(self.id)
         ret.name = self.name
         ret.description = self.description
-        ret.bio_sample_id = str(self.bio_sample_id)
+        if self.sample_name is not None:
+            ret.sample_name = self.sample_name
+        if self.bio_sample_id is not None:
+            ret.bio_sample_id = str(self.bio_sample_id)
         ret.created = protocol.datetime_to_milliseconds(
             self.creation_timestamp)
         ret.updated = protocol.datetime_to_milliseconds(
@@ -1374,7 +1374,8 @@ class RegistryDb(object):
         if request.name:
             query = query.filter(CallSet.name == request.name)
         if request.bio_sample_id:
-            query = query.filter(CallSet.bio_sample_id == request.bio_sample_id)
+            query = query.filter(
+                CallSet.bio_sample_id == request.bio_sample_id)
         return query
 
     def get_read_group_sets_search_query(self, request):

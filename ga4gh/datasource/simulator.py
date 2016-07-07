@@ -247,6 +247,7 @@ class SimulatedReadGroupSet(registry.ReadGroupSet):
                 name="sim_rgs{}".format(j),
                 random_seed=rng.randint(0, 2**31))
             read_group.bio_sample = rng.choice(bio_samples)
+            read_group.sample_name = read_group.bio_sample.individual.name
             self.read_groups.append(read_group)
 
     def generate_alignment(self, reference, read_groups, start):
