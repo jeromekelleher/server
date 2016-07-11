@@ -6,6 +6,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import json
+
 import ga4gh.exceptions as exceptions
 import ga4gh.protocol as protocol
 import ga4gh.registry as registry
@@ -811,6 +813,28 @@ class Backend(object):
         if nextPageToken is not None:
             response.next_page_token = nextPageToken
         return protocol.toJson(response)
+
+    def runFetchReads(self, id_, request_args):
+        """
+        Runs the fetch reads endpoint for the specified parameters and
+        returns a JSON ticket.
+
+        TODO This is the endpoint for the experimental GA4GH streaming
+        endpoint. Document this and separate it more nicely from the
+        rest of the code.
+        """
+        read_group_set = self._registry_db.get_read_group_set(id_)
+        reference_name = None
+        if 'referenceName' in request_args:
+            reference_name = request_args["referenceName"]
+        start = _parseIntegerArgument(request_args, 'start', None)
+        end = _parseIntegerArgument(request_args, 'end', None)
+        urls = read_group_set.run_url_fetch(reference_name, start, end)
+        ticket = {
+            "format": "BAM",
+            "urls": urls
+        }
+        return json.dumps(ticket)
 
     # Get requests.
 

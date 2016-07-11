@@ -562,6 +562,14 @@ def searchIndividuals():
         flask.request, app.backend.runSearchIndividuals)
 
 
+@DisplayedRoute('/reads/fetch/<id>')
+def fetchReads(id):
+    # TODO is the error handling JSON compatible here??
+    if flask.request.method != "GET":
+        raise exceptions.MethodNotAllowedException()
+    return app.backend.runFetchReads(id, flask.request.args)
+
+
 @DisplayedRoute(
     '/biosamples/<no(search):id>',
     pathDisplay='/biosamples/<id>')

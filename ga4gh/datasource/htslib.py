@@ -9,6 +9,8 @@ from __future__ import unicode_literals
 import collections
 import hashlib
 import os
+import tempfile
+import base64
 
 import pysam
 import sqlalchemy
@@ -830,6 +832,97 @@ class HtslibReadGroupSet(registry.ReadGroupSet, PysamMixin):
                 alignment_file, alignment, reference)
             if ga_alignment.read_group_id in read_group_ids:
                 yield ga_alignment
+
+
+    def __get_data_url(self, data):
+        """
+        Returns a dictionary representing a data URL.
+        """
+        data_uri = "data:application/octet-stream;base64,{}".format(
+            base64.b64encode(data))
+        return {"url": data_uri}
+
+    def __get_http_url(self, start, end):
+        """
+        Returns a dictionary representing a HTTP URL.
+        """
+        return {
+            "url": self.data_url,
+            "headers": {
+                "Range": "bytes={}-{}".format(start, end - 1)
+            }
+        }
+
+    def run_url_fetch(self, reference_name, start, end):
+        """
+        Runs the request for the streaming API and returns the corresponding
+        URL tickets.
+        """
+        eof = (
+           b"\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00BC"
+           b"\x02\x00\x1b\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+        # Read 128MB at a time
+        chunk_size = 128 * 2**20
+
+        in_af = self.__open_file(self.data_url, self.index_url)
+        with tempfile.NamedTemporaryFile(prefix="ga4gh_fetch_") as temp_bam:
+            out_af = pysam.AlignmentFile(temp_bam.name, "wb", template=in_af)
+            read_start = None
+            all_in_first_chunk = True
+            j = 0
+            ref_name = None
+            if reference_name is not None:
+                ref_name = reference_name.encode()
+            # TODO sanitize the values.
+            for read in in_af.fetch(ref_name, start, end):
+                virt_offset = in_af.tell()
+                file_offset = virt_offset >> 16
+                block_offset = virt_offset & 0xFFFF
+                out_af.write(read)
+                read_start = file_offset
+                j += 1
+                if block_offset == 0:
+                    all_in_first_chunk = False
+                    break
+            print("read ", j, " in prefix")
+            out_af.close()
+            temp_bam.seek(0)
+            first_chunk = temp_bam.read()
+        urls = [self.__get_data_url(first_chunk[:-len(eof)])]
+        if not all_in_first_chunk:
+            iterator = in_af.fetch(ref_name, end)
+            # We have to position the iterator to get to the correct
+            # place in the file.
+            # TODO this is ugly; what do we do when the iterator is
+            # empty??
+            read = next(iterator, None)
+            assert read is not None
+            skipped = 0
+            for read in in_af:
+                skipped += 1
+                virt_offset = in_af.tell()
+                file_offset = virt_offset >> 16
+                block_offset = virt_offset & 0xFFFF
+                read_end = file_offset
+                if block_offset == 0 and (
+                        read.pos >= end or read.reference_name != ref_name):
+                    break
+            print("Skipped over", skipped, "in suffix")
+            assert read_end is not None
+            # TODO deal with issues of small files and what occurs when we
+            # hit EOF when reading the file.
+            length = read_end - read_start
+            num_chunks = length // chunk_size
+            print("read_start = ", read_start, "read_end = ", read_end)
+            print(length / (1024 * 1024), "MB in", num_chunks, "chunks")
+            offset = read_start
+            for _ in range(num_chunks):
+                urls.append(self.__get_http_url(offset, offset + chunk_size))
+                offset += chunk_size
+            if length % chunk_size != 0:
+                urls.append(self.__get_http_url(offset, read_end))
+        urls.append(self.__get_data_url(eof))
+        return urls
 
 
 class PysamFileHandleCache(object):
