@@ -670,6 +670,7 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
         variant.reference_bases = record.ref
         if record.alts is not None:
             variant.alternate_bases.extend(list(record.alts))
+        variant.filter.extend(list(record.filter))
         # record.filter and record.qual are also available, when supported
         # by GAVariant.
         for key, value in record.info.iteritems():
